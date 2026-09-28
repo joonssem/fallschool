@@ -47,8 +47,9 @@
         <div class="tp-label">방 번호</div>
         <div id="tp-code" class="tp-code">----</div>
       </div>
-      <div id="tp-qr" class="tp-qr"></div>
+      <button id="tp-qr" class="tp-qr" title="QR 코드 크게 보기"></button>
     </div>
+    <button id="tp-qr-zoom" class="tp-btn tp-zoom">QR 크게 보기</button>
     <div id="tp-url" class="tp-url"></div>
     <div id="tp-phase" class="tp-phase">대기실 (자유 연습)</div>
     <div class="tp-buttons">
@@ -61,6 +62,16 @@
     <div class="tp-hint">이름을 누르면 그 학생을 따라가며 봅니다</div>
     <ol id="tp-list" class="tp-list"></ol>
   </aside>
+
+  <div id="qr-big" class="hidden">
+    <div class="qr-big-box">
+      <div id="qr-big-code" class="qr-big-code"></div>
+      <div id="qr-big-img" class="qr-big-img"></div>
+      <div class="qr-big-help">iPad 카메라로 QR 코드를 찍어 들어오세요</div>
+      <div id="qr-big-url" class="qr-big-url"></div>
+      <button id="qr-big-close" class="big">닫기</button>
+    </div>
+  </div>
 
   <div id="freeze" class="hidden">
     <div class="freeze-box">얼음!<small>선생님 말씀을 들어요</small></div>

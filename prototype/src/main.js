@@ -350,14 +350,32 @@ function setupTeacherPanel() {
   const url = joinUrl();
   $('tp-code').textContent = net.room.code;
   $('tp-url').textContent = url;
+  $('qr-big-code').textContent = `방 번호 ${net.room.code}`;
+  $('qr-big-url').textContent = url;
   loadQrLib()
     .then((qrcode) => {
       const qr = qrcode(0, 'M');
       qr.addData(url);
       qr.make();
-      $('tp-qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      const svg = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      $('tp-qr').innerHTML = svg;
+      $('qr-big-img').innerHTML = svg;
     })
-    .catch(() => {});
+    .catch(() => {
+      $('qr-big-img').textContent = 'QR 코드를 불러오지 못했습니다. 아래 주소로 접속하세요.';
+    });
+
+  // 전자칠판에 크게 띄우기
+  const showQr = (show) => $('qr-big').classList.toggle('hidden', !show);
+  $('tp-qr').addEventListener('click', () => showQr(true));
+  $('tp-qr-zoom').addEventListener('click', () => showQr(true));
+  $('qr-big-close').addEventListener('click', () => showQr(false));
+  $('qr-big').addEventListener('click', (e) => {
+    if (e.target.id === 'qr-big') showQr(false);
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') showQr(false);
+  });
 
   $('tp-start').addEventListener('click', () => net.room.startRace());
   $('tp-freeze').addEventListener('click', () => net.room.setFrozen(!net.room.meta?.frozen));
