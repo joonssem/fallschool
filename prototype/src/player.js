@@ -135,8 +135,9 @@ export class Player {
    * @param {number} camYaw 카메라 방위각
    * @param {import('./physics.js').PhysicsWorld} world
    * @param {(pos:THREE.Vector3, out:THREE.Vector3)=>void} windAt
+   * @param {(pos:THREE.Vector3)=>number} [gravityAt] 지구 중력 대비 배율 (행성 맵)
    */
-  step(dt, move, camYaw, world, windAt) {
+  step(dt, move, camYaw, world, windAt, gravityAt) {
     const T = TUNING;
 
     // 1. 움직이는 발판 위라면 함께 이동
@@ -233,7 +234,8 @@ export class Player {
     }
 
     // 7. 중력
-    this.vel.y = Math.max(this.vel.y - T.gravity * dt, -T.maxFall);
+    this.gravityScale = gravityAt ? gravityAt(this.pos) : 1;
+    this.vel.y = Math.max(this.vel.y - T.gravity * this.gravityScale * dt, -T.maxFall);
 
     // 8. 외부 이동 (바람, 미끄러운 경사)
     _extra.set(0, 0, 0);
@@ -290,7 +292,7 @@ export class Player {
 
     if (newGround) {
       if (newGround.kind === 'bounce') {
-        this.vel.y = T.bounceSpeed;
+        this.vel.y = newGround.bounceSpeed ?? T.bounceSpeed;
         this.grounded = false;
         this.ground = null;
         this.canDive = true;

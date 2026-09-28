@@ -49,6 +49,7 @@
             "frozen": { ".validate": "newData.isBoolean()" },
             "hostUid": { ".validate": "newData.isString() && newData.val().length <= 40" },
             "epoch": { ".validate": "newData.isNumber()" },
+            "mapId": { ".validate": "newData.isString() && newData.val().matches(/^[a-z]{1,16}$/)" },
             "$other": { ".validate": false }
           },
 

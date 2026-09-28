@@ -409,3 +409,19 @@ button.tp-qr { padding: 0; background: #fff; border-radius: 8px; cursor: zoom-in
 .qr-big-img svg { width: 100%; height: 100%; display: block; }
 .qr-big-help { font-size: clamp(18px, 2.6vh, 26px); font-weight: 800; }
 .qr-big-url { font-size: 14px; opacity: 0.6; word-break: break-all; text-align: center; -webkit-user-select: text; user-select: text; }
+
+/* ─── 맵 고르기 ─── */
+.maps { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-weight: 700; }
+.map-choice, .tp-map {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #eceaf6;
+  font-weight: 800;
+  font-size: 15px;
+  border: 3px solid transparent;
+}
+.map-choice.selected, .tp-map.selected { border-color: var(--ink); background: #fff3c4; }
+.map-hint { margin: 6px 0 14px; font-size: 12px; opacity: 0.6; }
+.tp-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tp-map { font-size: 13px; padding: 8px 6px; border-radius: 12px; }
+.tp-map:disabled { opacity: 0.45; }

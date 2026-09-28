@@ -1,7 +1,7 @@
-// 시험용 장애물 코스 "점프 연구소 시험장"
+// 맵 1: 장애물 코스 "점프 연구소 시험장"
 // 구간: 출발 → 몸풀기 계단 → 숨은 발판 → 회전 막대 광장 → 움직이는 발판·바람 다리 → 시소 다리 → 골인 언덕
 import * as THREE from 'three';
-import { BoxCollider } from './physics.js';
+import { mulberry32, sectionFinder, createLevel, makeKit, finalizeLevel } from './levels/kit.js';
 
 const COLORS = {
   start: 0xb8a9ff,
@@ -33,108 +33,15 @@ export const SECTIONS = [
   { name: '골인 언덕', zMax: -221.7 },
 ];
 
-export function sectionAt(z) {
-  let name = SECTIONS[0].name;
-  for (const s of SECTIONS) if (z < s.zMax) name = s.name;
-  return name;
-}
-
-function mulberry32(seed) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-export function buildLevel(scene, world, { seed = Date.now() } = {}) {
-  const matCache = new Map();
-  const mat = (color, extra = {}) => {
-    const key = color + JSON.stringify(extra);
-    if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...extra }));
-    return matCache.get(key);
-  };
-
-  const movers = [];
-  const checkpoints = [];
-  const level = {
-    spawn: new THREE.Vector3(0, 0, 5),
-    checkpoints,
-    movers,
-    finished: false,
-    onCheckpoint: null,
-    onFinish: null,
-    fanZones: [],
-  };
-
-  // 박스 하나 = 메시 + 충돌체. 위치는 윗면 기준.
-  function block(x, topY, z, sx, sy, sz, color, opts = {}) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), opts.material || mat(color));
-    mesh.position.set(x, topY - sy / 2, z);
-    mesh.castShadow = !!opts.castShadow;
-    mesh.receiveShadow = true;
-    (opts.parent || scene).add(mesh);
-    const col = world.add(new BoxCollider(mesh, new THREE.Vector3(sx / 2, sy / 2, sz / 2), opts));
-    mesh.userData.collider = col;
-    return mesh;
-  }
-  const platform = (x, topY, z, sx, sz, color, opts = {}) => block(x, topY, z, sx, opts.thick ?? 1, sz, color, opts);
-
-  function sign(text, x, y, z, { width = 6, color = '#6a4c93', rotY = 0 } = {}) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 128;
-    const g = canvas.getContext('2d');
-    g.fillStyle = '#ffffff';
-    g.beginPath();
-    g.roundRect(4, 4, 504, 120, 40);
-    g.fill();
-    g.fillStyle = color;
-    let size = 64;
-    const font = (px) => `bold ${px}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-    g.font = font(size);
-    while (size > 24 && g.measureText(text).width > 460) g.font = font((size -= 4));
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(text, 256, 68);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, width / 4),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
-    );
-    m.position.set(x, y, z);
-    m.rotation.y = rotY;
-    scene.add(m);
-    return m;
-  }
-
-  function checkpoint(mesh, respawn, name) {
-    const index = checkpoints.length;
-    const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3, 8), mat(0xffffff));
-    const top = mesh.position.y + mesh.geometry.parameters.height / 2;
-    flagPole.position.set(mesh.position.x + mesh.geometry.parameters.width / 2 - 0.8, top + 1.5, respawn.z);
-    scene.add(flagPole);
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.05), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
-    flag.position.set(flagPole.position.x - 0.65, top + 2.6, respawn.z);
-    scene.add(flag);
-    const cp = { index, name, respawn: respawn.clone(), flag, reached: index === 0 };
-    if (cp.reached) flag.material.color.setHex(0x2ec4b6);
-    checkpoints.push(cp);
-    mesh.userData.collider.onStand = () => {
-      if (cp.reached) return;
-      cp.reached = true;
-      flag.material.color.setHex(0x2ec4b6);
-      level.onCheckpoint?.(cp);
-    };
-    return cp;
-  }
+export function buildLevel(parent, world, { seed = Date.now() } = {}) {
+  const level = createLevel(parent, world, { sectionAt: sectionFinder(SECTIONS), fanZones: [] });
+  const scene = level.root;
+  const { movers, checkpoints } = level;
+  const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
 
   // ─── 출발 ───────────────────────────────────────────
   platform(0, 0, 0, 16, 16, COLORS.start);
-  checkpoints.push({ index: 0, name: '출발', respawn: level.spawn.clone(), reached: true });
+  startCheckpoint();
   for (const sx of [-1, 1]) block(sx * 7.4, 7, -7.4, 1, 7, 1, COLORS.pillar, { castShadow: true });
   const arch = new THREE.Mesh(new THREE.BoxGeometry(15.8, 0.8, 1), mat(COLORS.pillar));
   arch.position.set(0, 7.4, -7.4);
@@ -434,14 +341,7 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
   // ─── 골인 언덕 ───────────────────────────────────────
   const rise = 3;
   const run = 12;
-  const theta = Math.atan2(rise, run);
-  const len = Math.hypot(rise, run);
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(8, 1, len), mat(COLORS.ramp));
-  ramp.rotation.x = theta;
-  ramp.position.set(0, 5 + rise / 2 - 0.5 * Math.cos(theta), -222 - run / 2 - 0.5 * Math.sin(theta));
-  ramp.receiveShadow = true;
-  scene.add(ramp);
-  world.add(new BoxCollider(ramp, new THREE.Vector3(4, 0.5, len / 2)));
+  ramp(0, -222, 5, -222 - run, 5 + rise, 8, COLORS.ramp);
   sign('골인 언덕', 0, 12, -221.5, { width: 5 });
 
   [[-225, 0], [-229.5, Math.PI]].forEach(([z, phase]) => {
@@ -465,11 +365,7 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
   crown.position.set(0, 10, -242);
   scene.add(crown);
   movers.push({ root: null, update(t) { crown.rotation.y = t * 1.5; crown.position.y = 10 + Math.sin(t * 2) * 0.2; } });
-  finish.userData.collider.onStand = (player) => {
-    if (level.finished || player.pos.z > -236) return;
-    level.finished = true;
-    level.onFinish?.();
-  };
+  finishPad(finish, -236);
 
   // ─── 배경 장식: 구름과 떠 있는 섬 ─────────────────────
   const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
@@ -493,25 +389,6 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
   sea.position.set(0, -14, -120);
   scene.add(sea);
 
-  // ─── 매 스텝 갱신 ────────────────────────────────────
-  level.update = (t, dt, player) => {
-    for (const m of movers) {
-      m.update(t, dt, player);
-      if (m.root) m.root.updateMatrixWorld(true);
-    }
-    world.syncDynamic();
-  };
-
-  level.resetProgress = () => {
-    level.finished = false;
-    for (const cp of checkpoints) {
-      cp.reached = cp.index === 0;
-      cp.flag?.material.color.setHex(cp.reached ? 0x2ec4b6 : 0xcccccc);
-    }
-  };
-
   level.setSeed(seed);
-  scene.updateMatrixWorld(true);
-  for (const c of world.colliders) c.sync(true);
-  return level;
+  return finalizeLevel(level);
 }

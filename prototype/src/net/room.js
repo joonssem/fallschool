@@ -40,10 +40,11 @@ export class Room {
     this.sent = { x: 1e9, y: 0, z: 0, f: 0, s: -1, at: 0 };
   }
 
-  static async create(backend) {
+  static async create(backend, { mapId = 'lab' } = {}) {
     for (let i = 0; i < 10; i++) {
       const code = String(1000 + Math.floor(Math.random() * 9000));
       const ok = await backend.createIfAbsent(`${DB_ROOT}/rooms/${code}/meta`, {
+        mapId,
         phase: 'LOBBY',
         race: 0,
         seed: randomSeed(),
@@ -160,6 +161,17 @@ export class Room {
       race: (this.meta?.race || 0) + 1,
       seed: randomSeed(),
       startAt: this.b.now() + countdownMs,
+      frozen: false,
+    });
+  }
+
+  // 맵 바꾸기: 대기실로 돌아가며 새 시드
+  setMap(mapId) {
+    return this.b.update(`${this.base}/meta`, {
+      mapId,
+      phase: 'LOBBY',
+      race: (this.meta?.race || 0) + 1,
+      seed: randomSeed(),
       frozen: false,
     });
   }

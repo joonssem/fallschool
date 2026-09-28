@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics.js';
 import { Player } from './player.js';
-import { buildLevel, sectionAt } from './level.js';
+import { MAPS, mapById } from './levels/index.js';
 import { Input } from './input.js';
 import { Sfx } from './sfx.js';
 import { RemoteCrowd, stateCode } from './remote.js';
@@ -43,7 +43,8 @@ scene.fog = new THREE.Fog(0xbfe6ff, 60, 170);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 400);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9fb7d6, 1.6));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9fb7d6, 1.6);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -56,11 +57,15 @@ function applyQuality() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.ratio));
   renderer.shadowMap.enabled = q.shadow;
   sun.castShadow = q.shadow;
+  applyQualityToMaterials();
+  $('btn-quality').textContent = q.label;
+  resize();
+}
+
+function applyQualityToMaterials() {
   scene.traverse((o) => {
     if (o.material) o.material.needsUpdate = true;
   });
-  $('btn-quality').textContent = q.label;
-  resize();
 }
 
 function resize() {
@@ -75,11 +80,32 @@ window.addEventListener('resize', resize);
 
 // ─── 월드 ─────────────────────────────────────────────
 const world = new PhysicsWorld();
-const level = buildLevel(scene, world);
+let level = null;
+let mapId = null;
+
+// 맵 교체: 이전 맵을 지우고 새 맵을 만든 뒤 콜백·하늘을 연결한다
+function loadMap(id, seed = Date.now() >>> 0) {
+  const def = mapById(id);
+  level?.dispose();
+  level = def.build(scene, world, { seed });
+  mapId = def.id;
+  level.onCheckpoint = onCheckpoint;
+  level.onFinish = onFinish;
+  level.onTileTriggered = (i) => net.room?.triggerTile(i);
+  const sky = level.sky;
+  scene.background = new THREE.Color(sky.background);
+  scene.fog = new THREE.Fog(...sky.fog);
+  hemi.intensity = sky.hemi ?? 1.6;
+  if (params.has('reveal')) level.revealPath();
+  applyQualityToMaterials();
+  return level;
+}
+
 const player = new Player(scene);
-player.respawn(level.spawn);
-if (params.has('reveal')) level.revealPath();
 const crowd = new RemoteCrowd(scene);
+let chosenMap = mapById(params.get('map') || store.get('map')).id;
+loadMap(chosenMap);
+player.respawn(level.spawn);
 
 const sfx = new Sfx();
 const input = new Input({
@@ -148,14 +174,14 @@ function resetRun() {
   respawnAtCheckpoint(false);
 }
 
-level.onCheckpoint = (cp) => {
+function onCheckpoint(cp) {
   if (cp.index > game.cpIndex) game.cpIndex = cp.index;
   toast(`체크포인트! (${cp.name})`);
   sfx.play('checkpoint');
   if (net.mode === 'student' && phase() === 'racing') net.room.publishProgress({ cp: game.cpIndex });
-};
+}
 
-level.onFinish = () => {
+function onFinish() {
   sfx.play('finish');
   spawnConfetti();
   const p = phase();
@@ -172,9 +198,15 @@ level.onFinish = () => {
       toast('연습 완주! 선생님의 출발 신호를 기다려요');
     }
   }
-};
+}
 
-level.onTileTriggered = (i) => net.room?.triggerTile(i);
+// 방에서 정한 맵과 다르면 바꾼다. 바꿨으면 true
+function ensureMap(m) {
+  const want = mapById(m.mapId).id;
+  if (want === mapId) return false;
+  loadMap(want, m.seed);
+  return true;
+}
 
 function showFinish(title, seconds, again) {
   $('finish-title').textContent = title;
@@ -190,13 +222,14 @@ function onStudentMeta(m) {
     $('banner').textContent = '방이 닫혔습니다';
     return;
   }
+  const switched = ensureMap(m);
   if (m.phase === 'RACE' && game.race !== m.race) {
     // 새 경기: 모두 출발선으로
     game.race = m.race;
     level.setSeed(m.seed);
     resetRun();
     net.room.publishProgress({ race: m.race, cp: 0, falls: 0, finish: 0 });
-  } else if (m.phase === 'LOBBY' && (net.lastPhase !== 'LOBBY' || level.seed !== m.seed)) {
+  } else if (m.phase === 'LOBBY' && (net.lastPhase !== 'LOBBY' || level.seed !== m.seed || switched)) {
     game.race = null;
     level.setSeed(m.seed);
     resetRun();
@@ -204,6 +237,8 @@ function onStudentMeta(m) {
     const mine = game.finishMs / 1000;
     showFinish(mine > 0 ? '경기 끝! 완주했어요' : '경기 끝!', mine, false);
     $('result-class-row').classList.remove('hidden');
+  } else if (switched) {
+    resetRun();
   }
   if (m.phase !== 'RESULT') $('overlay-finish').classList.add('hidden');
   net.lastPhase = m.phase;
@@ -211,6 +246,7 @@ function onStudentMeta(m) {
 
 function onTeacherMeta(m) {
   if (!m) return;
+  ensureMap(m);
   if (level.seed !== m.seed) level.setSeed(m.seed);
   if (m.phase === 'RACE' && game.race !== m.race) {
     game.race = m.race;
@@ -240,6 +276,27 @@ document.querySelectorAll('.color-choice').forEach((btn) => {
   });
 });
 player.setColor(parseInt(chosenColor.slice(1), 16));
+
+// 맵 고르기 (혼자 연습·방 만들기용). 고르면 바로 배경으로 보여 준다.
+$('map-choices').insertAdjacentHTML(
+  'beforeend',
+  MAPS.map((m) => `<button class="map-choice" data-map="${m.id}">${m.name}</button>`).join(''),
+);
+const markMap = () =>
+  document.querySelectorAll('.map-choice').forEach((b) => b.classList.toggle('selected', b.dataset.map === chosenMap));
+markMap();
+$('map-choices').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-map]');
+  if (!btn) return;
+  chosenMap = btn.dataset.map;
+  store.set('map', chosenMap);
+  markMap();
+  if (chosenMap !== mapId) {
+    loadMap(chosenMap);
+    player.respawn(level.spawn);
+    cam.target.copy(player.pos).y += 1.6;
+  }
+});
 
 async function getBackend() {
   if (net.backend) return net.backend;
@@ -299,7 +356,8 @@ $('btn-join').addEventListener('click', () =>
 $('btn-solo').addEventListener('click', () => {
   net.mode = 'solo';
   store.set('color', chosenColor);
-  level.setSeed(Date.now() >>> 0);
+  if (chosenMap !== mapId) loadMap(chosenMap);
+  else level.setSeed(Date.now() >>> 0);
   if (startCp === 0) resetRun();
   game.running = true;
   closeMenu();
@@ -312,7 +370,7 @@ $('btn-teacher').addEventListener('click', () =>
     if (code.trim() !== TEACHER_CODE) throw new Error('선생님 코드가 맞지 않습니다.');
     msg('방을 만드는 중…', true);
     const backend = await getBackend();
-    net.room = await Room.create(backend);
+    net.room = await Room.create(backend, { mapId: chosenMap });
     net.mode = 'teacher';
     net.room.onTile = (i) => level.triggerTile(i);
     net.room.onMeta = onTeacherMeta;
@@ -381,6 +439,12 @@ function setupTeacherPanel() {
   $('tp-freeze').addEventListener('click', () => net.room.setFrozen(!net.room.meta?.frozen));
   $('tp-end').addEventListener('click', () => net.room.endRace());
   $('tp-lobby').addEventListener('click', () => net.room.toLobby());
+  $('tp-maps').innerHTML = MAPS.map((m) => `<button class="tp-map" data-map="${m.id}">${m.name}</button>`).join('');
+  $('tp-maps').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-map]');
+    if (!btn || btn.disabled) return;
+    net.room.setMap(btn.dataset.map);
+  });
   $('tp-list').addEventListener('click', (e) => {
     const li = e.target.closest('li[data-uid]');
     if (!li) return;
@@ -404,6 +468,12 @@ function renderTeacherControls() {
   $('tp-end').disabled = !(p === 'racing' || p === 'countdown');
   $('tp-freeze').classList.toggle('on', !!m.frozen);
   $('tp-freeze').textContent = m.frozen ? '얼음 풀기' : '얼음!';
+  // 맵은 경기 중이 아닐 때만 바꿀 수 있다
+  const canChange = p === 'lobby' || p === 'result';
+  document.querySelectorAll('#tp-maps .tp-map').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.map === mapId);
+    b.disabled = !canChange;
+  });
 }
 
 let listTimer = 0;
@@ -423,7 +493,7 @@ function renderTeacherList() {
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   $('tp-list').innerHTML = rows
     .map((r) => {
-      const where = r.pos ? sectionAt(r.pos.z) : '—';
+      const where = r.pos ? level.sectionAt(r.pos.z) : '—';
       const right = r.done ? `<span class="done">${formatTime(r.done / 1000)}</span>` : `<span class="where">떨어짐 ${r.falls}</span>`;
       return `<li data-uid="${esc(r.uid)}" class="${net.followUid === r.uid ? 'follow' : ''}">
         <span class="dot" style="background:${esc(r.color)}"></span>
@@ -506,7 +576,7 @@ function updateHud(dt) {
   }
   $('timer').textContent = room && p === 'lobby' ? '연습' : formatTime(Math.max(0, t));
   $('falls').textContent = `떨어짐 ${game.falls}`;
-  $('section').textContent = sectionAt(net.mode === 'teacher' ? teacherTarget().z : player.pos.z);
+  $('section').textContent = level.sectionAt(net.mode === 'teacher' ? teacherTarget().z : player.pos.z);
 
   // 카운트다운
   const cd = $('countdown');
@@ -620,7 +690,7 @@ function simulate(dt) {
   const stepOnce = () => {
     simTime += STEP;
     level.update(simTime, STEP, simulatePlayer ? player : null);
-    if (simulatePlayer && game.respawning <= 0) player.step(STEP, input.move, cam.yaw, world, level.windAt);
+    if (simulatePlayer && game.respawning <= 0) player.step(STEP, input.move, cam.yaw, world, level.windAt, level.gravityAt);
   };
 
   const target = sharedTime();
@@ -729,7 +799,16 @@ if (startCp > 0) {
 }
 
 // 모의 백엔드 시험 때만 상태를 들여다볼 수 있게 한다
-if (params.get('net') === 'local') window.__fs = { net, game, level, player, crowd, phase };
+if (params.get('net') === 'local') window.__fs = {
+    net,
+    game,
+    player,
+    crowd,
+    phase,
+    get level() {
+      return level;
+    },
+  };
 
 applyQuality();
 cam.target.copy(player.pos).y += 1.6;

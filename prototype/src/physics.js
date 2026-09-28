@@ -18,6 +18,7 @@ export class BoxCollider {
     this.kind = opts.kind || 'solid';
     this.dynamic = !!opts.dynamic;
     this.slippery = !!opts.slippery;
+    this.bounceSpeed = opts.bounceSpeed ?? null; // 'bounce' 발판마다 튕기는 힘을 다르게
     this.onStand = opts.onStand || null;
     this.enabled = true;
     this.radius = this.half.length();
