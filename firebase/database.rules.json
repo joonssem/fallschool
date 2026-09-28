@@ -1,0 +1,97 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      ".read": true,
+      "$code": {
+        ".write": true,
+        ".validate": "$code.matches(/^[0-9]{4}$/)",
+        "meta": { ".validate": true },
+        "players": { ".validate": true },
+        "pos": { ".validate": true },
+        "presence": { ".validate": true },
+        "kicks": { ".validate": true },
+        "stats": { ".validate": true },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "presence": {
+      "$uid": {
+        ".write": true,
+        ".validate": "$uid.length <= 40 && newData.hasChildren(['online'])"
+      }
+    },
+
+    "fallschool": {
+      "index": {
+        ".read": true,
+        "$code": {
+          ".write": "!data.exists() || data.val() < now - 21600000",
+          ".validate": "$code.matches(/^[0-9]{4}$/) && newData.isNumber()"
+        }
+      },
+      "rooms": {
+        "$code": {
+          ".read": true,
+          ".write": "!newData.exists() && (!data.child('meta/epoch').exists() || data.child('meta/epoch').val() < now - 21600000)",
+          ".validate": "$code.matches(/^[0-9]{4}$/)",
+
+          "meta": {
+            ".write": "!data.exists() || (newData.exists() && newData.child('hostUid').val() === data.child('hostUid').val())",
+            ".validate": "newData.hasChildren(['phase', 'race', 'seed', 'startAt', 'frozen', 'hostUid', 'epoch'])",
+            "phase": { ".validate": "newData.isString() && newData.val().matches(/^(LOBBY|RACE|RESULT)$/)" },
+            "race": { ".validate": "newData.isNumber()" },
+            "seed": { ".validate": "newData.isNumber()" },
+            "startAt": { ".validate": "newData.isNumber()" },
+            "frozen": { ".validate": "newData.isBoolean()" },
+            "hostUid": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "epoch": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          },
+
+          "players": {
+            "$uid": {
+              ".write": true,
+              ".validate": "$uid.length <= 40 && newData.hasChildren(['name', 'color'])",
+              "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 8" },
+              "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
+              "race": { ".validate": "newData.isNumber()" },
+              "cp": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" },
+              "falls": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+              "finish": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+              "$other": { ".validate": false }
+            }
+          },
+
+          "pos": {
+            "$uid": {
+              ".write": true,
+              ".validate": "$uid.length <= 40 && newData.isString() && newData.val().length <= 64"
+            }
+          },
+
+          "presence": {
+            "$uid": {
+              ".write": true,
+              ".validate": "$uid.length <= 40 && newData.isNumber()"
+            }
+          },
+
+          "tiles": {
+            "$race": {
+              "$i": {
+                ".write": true,
+                ".validate": "$i.matches(/^[0-9]{1,2}$/) && newData.isNumber()"
+              }
+            }
+          },
+
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

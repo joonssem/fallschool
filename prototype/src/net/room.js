@@ -8,6 +8,7 @@
 import { DB_ROOT } from './config.js';
 
 const SEND_INTERVAL = 100; // ms
+const ROOM_TTL = 6 * 60 * 60 * 1000; // 6시간 지난 방은 다음 교사가 방을 만들 때 지운다 (규칙과 같은 값)
 const HEARTBEAT = 2000; // 움직이지 않아도 이 간격으로는 보낸다
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -52,12 +53,29 @@ export class Room {
         epoch: backend.ts(),
       });
       if (ok) {
+        backend.set(`${DB_ROOT}/index/${code}`, backend.ts()).catch(() => {});
+        Room.cleanupOld(backend).catch(() => {});
         const room = new Room(backend, code, 'teacher');
         room.listen();
         return room;
       }
     }
     throw new Error('방 번호를 만들지 못했습니다. 다시 시도해 주세요.');
+  }
+
+  // 방 목록(index)에는 방 번호와 만든 시각만 있다. 학생 이름이 오래 남지 않도록 지난 방을 지운다.
+  static async cleanupOld(backend) {
+    const index = (await backend.get(`${DB_ROOT}/index`)) || {};
+    const cutoff = backend.now() - ROOM_TTL;
+    for (const [code, createdAt] of Object.entries(index)) {
+      if (typeof createdAt !== 'number' || createdAt >= cutoff) continue;
+      try {
+        await backend.set(`${DB_ROOT}/rooms/${code}`, null);
+        await backend.set(`${DB_ROOT}/index/${code}`, null);
+      } catch {
+        // 규칙이 거부하면(아직 6시간이 안 된 방 등) 건너뛴다
+      }
+    }
   }
 
   static async join(backend, code, profile) {

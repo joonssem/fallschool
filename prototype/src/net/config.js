@@ -12,5 +12,6 @@ export const firebaseConfig = {
 
 export const DB_ROOT = 'fallschool';
 
-// 학생이 방을 만들지 못하게 막는 선생님 코드 (교실 대소동과 같은 값)
-export const TEACHER_CODE = '하루담이';
+// 학생이 방을 만들지 못하게 막는 선생님 코드
+// 페이지 소스에 들어가므로 비밀번호가 아니라 "학생이 실수로 방을 만들지 않게 하는" 정도의 장치다.
+export const TEACHER_CODE = '코울슬로';
