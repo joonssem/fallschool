@@ -4,6 +4,11 @@
 
 ## 실행
 
+**배포 주소 (GitHub Pages)**: https://joonssem.github.io/fallschool/prototype/
+`main` 브랜치에 푸시하면 1~2분 뒤 자동으로 갱신된다.
+
+PC에서 수정하며 시험할 때:
+
 ```bash
 # prototype 폴더에서
 python -m http.server 8000 --bind 0.0.0.0
