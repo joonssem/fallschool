@@ -156,20 +156,20 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
   checkpoint(cp1, new THREE.Vector3(0, 5, -40), '숨은 발판 앞');
   sign('숨은 발판: 진짜 길을 찾아라!', 0, 11, -44.5, { width: 9 });
 
-  const rand = mulberry32(seed);
+  // 장식용 난수는 코스 시드와 분리 (방마다 배경이 달라지지 않게)
+  const rand = mulberry32(20260928);
   const COLS = 5;
   const ROWS = 8;
   const PITCH = 2.7;
   const TILE = 2.4;
-  let col = Math.floor(rand() * COLS);
-  const path = [];
-  for (let r = 0; r < ROWS; r++) {
-    path.push(col);
-    const step = Math.floor(rand() * 3) - 1;
-    col = THREE.MathUtils.clamp(col + step, 0, COLS - 1);
-  }
   const tiles = [];
   const tileBase = new THREE.Color(COLORS.tile);
+
+  function startShake(tile) {
+    tile.state = 'shaking';
+    tile.timer = 0.45;
+  }
+
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const x = (c - (COLS - 1) / 2) * PITCH;
@@ -177,7 +177,7 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
       const mesh = block(x, 5, z, TILE, 0.6, TILE, 0, {
         material: new THREE.MeshStandardMaterial({ color: tileBase, roughness: 0.5 }),
       });
-      const tile = { mesh, real: path[r] === c, home: mesh.position.clone(), timer: 0, state: 'idle', fell: false };
+      const tile = { index: tiles.length, row: r, col: c, mesh, real: false, home: mesh.position.clone(), timer: 0, state: 'idle', fell: false };
       tiles.push(tile);
       mesh.userData.collider.onStand = () => {
         if (tile.real) {
@@ -186,12 +186,40 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
             mesh.material.color.set(0xb9f2ff);
           }
         } else if (tile.state === 'idle') {
-          tile.state = 'shaking';
-          tile.timer = 0.45;
+          startShake(tile);
+          level.onTileTriggered?.(tile.index);
         }
       };
     }
   }
+
+  // 방 시드로 진짜 길을 정한다 (같은 방이면 모두 같은 길)
+  level.setSeed = (s) => {
+    level.seed = s;
+    const pathRand = mulberry32(s);
+    let col = Math.floor(pathRand() * COLS);
+    const path = [];
+    for (let r = 0; r < ROWS; r++) {
+      path.push(col);
+      col = THREE.MathUtils.clamp(col + Math.floor(pathRand() * 3) - 1, 0, COLS - 1);
+    }
+    for (const tile of tiles) {
+      tile.real = path[tile.row] === tile.col;
+      tile.state = 'idle';
+      tile.fell = false;
+      tile.timer = 0;
+      tile.mesh.position.copy(tile.home);
+      tile.mesh.userData.collider.enabled = true;
+      tile.mesh.material.color.copy(tileBase);
+    }
+    if (level.revealed) level.revealPath();
+  };
+
+  // 다른 학생이 밟아 무너진 발판
+  level.triggerTile = (index) => {
+    const tile = tiles[index];
+    if (tile && !tile.real && tile.state === 'idle') startShake(tile);
+  };
   movers.push({
     root: null,
     update(t, dt) {
@@ -220,6 +248,7 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
     },
   });
   level.revealPath = () => {
+    level.revealed = true;
     for (const tile of tiles) if (tile.real) tile.mesh.material.color.set(0xffe066);
   };
 
@@ -481,6 +510,7 @@ export function buildLevel(scene, world, { seed = Date.now() } = {}) {
     }
   };
 
+  level.setSeed(seed);
   scene.updateMatrixWorld(true);
   for (const c of world.colliders) c.sync(true);
   return level;

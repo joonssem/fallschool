@@ -40,7 +40,14 @@ export class Input {
     for (const ev of ['gesturestart', 'gesturechange', 'dblclick', 'contextmenu']) {
       document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
     }
-    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    // 게임 화면은 스크롤을 막고, 시작 화면·교사 목록처럼 스크롤이 필요한 곳만 허용
+    document.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!e.target.closest?.('.overlay, #teacher-panel')) e.preventDefault();
+      },
+      { passive: false },
+    );
   }
 
   bindButton(el, fn) {

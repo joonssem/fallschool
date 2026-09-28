@@ -21,6 +21,7 @@
     <div class="hud-top-left">
       <div id="timer">0:00.0</div>
       <div id="section">출발</div>
+      <div id="room-status" class="hidden"></div>
     </div>
     <div class="hud-top-right">
       <span id="falls">떨어짐 0</span>
@@ -31,23 +32,49 @@
       <span id="fps"></span>
     </div>
     <div id="toast"></div>
+    <div id="banner" class="hidden"></div>
+    <div id="countdown" class="hidden"></div>
   </div>
 
   <div id="stick-base"><div id="stick-knob"></div></div>
   <button id="btn-dive" class="action">다이브</button>
   <button id="btn-jump" class="action">점프</button>
 
+  <!-- 교사 화면 -->
+  <aside id="teacher-panel" class="hidden">
+    <div class="tp-head">
+      <div>
+        <div class="tp-label">방 번호</div>
+        <div id="tp-code" class="tp-code">----</div>
+      </div>
+      <div id="tp-qr" class="tp-qr"></div>
+    </div>
+    <div id="tp-url" class="tp-url"></div>
+    <div id="tp-phase" class="tp-phase">대기실 (자유 연습)</div>
+    <div class="tp-buttons">
+      <button id="tp-start" class="tp-btn go">출발!</button>
+      <button id="tp-freeze" class="tp-btn freeze">얼음!</button>
+      <button id="tp-end" class="tp-btn">경기 끝</button>
+      <button id="tp-lobby" class="tp-btn">대기실로</button>
+    </div>
+    <div class="tp-summary"><span id="tp-count">접속 0명</span><span id="tp-finished"></span></div>
+    <div class="tp-hint">이름을 누르면 그 학생을 따라가며 봅니다</div>
+    <ol id="tp-list" class="tp-list"></ol>
+  </aside>
+
+  <div id="freeze" class="hidden">
+    <div class="freeze-box">얼음!<small>선생님 말씀을 들어요</small></div>
+  </div>
+
   <div id="fade"></div>
 
   <div id="overlay-start" class="overlay">
     <div class="panel">
       <h1>점프 연구소 시험장</h1>
-      <p class="sub">캐릭터 조작과 장애물 코스 시험판</p>
-      <div class="controls">
-        <div><b>왼쪽 화면</b> 누르고 끌기 → 이동</div>
-        <div><b>오른쪽 화면</b> 끌기 → 카메라 돌리기</div>
-        <div><b>점프</b> 버튼 / <b>다이브</b> 버튼 (공중에서도 가능)</div>
-        <div class="keys">키보드: WASD·방향키 이동, Space 점프, Shift 다이브, 마우스 끌기로 카메라</div>
+      <p class="sub">친구들과 함께 장애물 코스를 달려요</p>
+      <div class="form">
+        <label>방 번호<input id="in-room" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="1234"></label>
+        <label>이름<input id="in-name" maxlength="8" autocomplete="off" placeholder="별명"></label>
       </div>
       <div class="colors">
         <span>내 색깔</span>
@@ -56,16 +83,32 @@
         <button class="color-choice" data-color="#80ed99" aria-label="연두"></button>
         <button class="color-choice" data-color="#ffb703" aria-label="주황"></button>
         <button class="color-choice" data-color="#9b5de5" aria-label="보라"></button>
+        <button class="color-choice" data-color="#ef476f" aria-label="빨강"></button>
+        <button class="color-choice" data-color="#118ab2" aria-label="파랑"></button>
+        <button class="color-choice" data-color="#f1faee" aria-label="하양"></button>
       </div>
-      <button id="btn-start" class="big">시작하기</button>
+      <button id="btn-join" class="big">참가하기</button>
+      <p id="start-msg" class="msg"></p>
+      <div class="alt">
+        <button id="btn-solo" class="link">혼자 연습하기</button>
+        <button id="btn-teacher" class="link">선생님: 방 만들기</button>
+      </div>
+      <details class="controls">
+        <summary>조작 방법</summary>
+        <div><b>왼쪽 화면</b> 누르고 끌기 → 이동</div>
+        <div><b>오른쪽 화면</b> 끌기 → 카메라 돌리기</div>
+        <div><b>점프</b> 버튼 / <b>다이브</b> 버튼 (공중에서도 가능)</div>
+        <div class="keys">키보드: WASD·방향키 이동, Space 점프, Shift 다이브, 마우스 끌기로 카메라</div>
+      </details>
     </div>
   </div>
 
   <div id="overlay-finish" class="overlay hidden">
     <div class="panel">
-      <h1>골인!</h1>
+      <h1 id="finish-title">골인!</h1>
       <div class="result"><span>기록</span><b id="result-time">0:00.0</b></div>
       <div class="result"><span>떨어진 횟수</span><b id="result-falls">0번</b></div>
+      <div class="result hidden" id="result-class-row"><span>우리 반 완주</span><b id="result-class">0 / 0명</b></div>
       <button id="btn-again" class="big">다시 하기</button>
     </div>
   </div>
