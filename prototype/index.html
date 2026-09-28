@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>점프 연구소 시험장</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="touch-surface"></div>
+
+  <div id="hud">
+    <div class="hud-top-left">
+      <div id="timer">0:00.0</div>
+      <div id="section">출발</div>
+    </div>
+    <div class="hud-top-right">
+      <span id="falls">떨어짐 0</span>
+      <button id="btn-respawn" class="small">체크포인트로</button>
+      <button id="btn-restart" class="small">처음부터</button>
+      <button id="btn-quality" class="small">화질</button>
+      <button id="btn-sound" class="small">소리 켬</button>
+      <span id="fps"></span>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="stick-base"><div id="stick-knob"></div></div>
+  <button id="btn-dive" class="action">다이브</button>
+  <button id="btn-jump" class="action">점프</button>
+
+  <div id="fade"></div>
+
+  <div id="overlay-start" class="overlay">
+    <div class="panel">
+      <h1>점프 연구소 시험장</h1>
+      <p class="sub">캐릭터 조작과 장애물 코스 시험판</p>
+      <div class="controls">
+        <div><b>왼쪽 화면</b> 누르고 끌기 → 이동</div>
+        <div><b>오른쪽 화면</b> 끌기 → 카메라 돌리기</div>
+        <div><b>점프</b> 버튼 / <b>다이브</b> 버튼 (공중에서도 가능)</div>
+        <div class="keys">키보드: WASD·방향키 이동, Space 점프, Shift 다이브, 마우스 끌기로 카메라</div>
+      </div>
+      <div class="colors">
+        <span>내 색깔</span>
+        <button class="color-choice selected" data-color="#ff7aa8" aria-label="분홍"></button>
+        <button class="color-choice" data-color="#4cc9f0" aria-label="하늘"></button>
+        <button class="color-choice" data-color="#80ed99" aria-label="연두"></button>
+        <button class="color-choice" data-color="#ffb703" aria-label="주황"></button>
+        <button class="color-choice" data-color="#9b5de5" aria-label="보라"></button>
+      </div>
+      <button id="btn-start" class="big">시작하기</button>
+    </div>
+  </div>
+
+  <div id="overlay-finish" class="overlay hidden">
+    <div class="panel">
+      <h1>골인!</h1>
+      <div class="result"><span>기록</span><b id="result-time">0:00.0</b></div>
+      <div class="result"><span>떨어진 횟수</span><b id="result-falls">0번</b></div>
+      <button id="btn-again" class="big">다시 하기</button>
+    </div>
+  </div>
+
+  <div id="rotate-hint"><div>iPad를 <b>가로</b>로 돌려 주세요</div></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
