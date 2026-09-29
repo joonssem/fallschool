@@ -40,7 +40,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar, forkEntry } = makeKit(level);
   const Y = 1.5;
   const doors = [];
 
@@ -121,8 +121,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   platform(0, 0, 0, 16, 16, C.floor);
   startCheckpoint('입구');
   sign('전기 회로 공장', -7.5, 3.4, -3, { width: 6, color: '#118ab2', lines: ['전기 회로 공장', '스위치 발판에 서면', '회로가 이어져요'], rotY: 0.45 });
-  platform(0, 0.5, -12.5, 6, 5, C.floor2);
-  platform(0, 1, -19, 6, 4, C.floor2);
+  forkEntry({ side: 1, color: 0xc9a227, color2: C.floor2 }); // 돌아가는 길은 오른쪽 (도전 별이 왼쪽)
 
   // ─── 회로 잇기: 스위치 1개 ───────────────────────────────
   const s1 = platform(0, Y, -30, 14, 14, C.floor);

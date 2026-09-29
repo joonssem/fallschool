@@ -44,7 +44,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar, forkEntry } = makeKit(level);
   const Y = 1.5; // 코스 대부분의 높이
 
   // 비커: 받침대(충돌) 위에 유리 + 색 있는 용액. 문 앞에서 "이 색"을 눈으로 보여 준다.
@@ -69,8 +69,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   platform(0, 0, 0, 16, 16, C.floor);
   startCheckpoint('실험실 입구');
   sideSign(-1, 0, -3, ['산과 염기 실험실', '용액의 성질을 알아야', '길이 열려요'], '#6a4c93');
-  platform(0, 0.5, -12.5, 5, 5, C.floor2);
-  platform(0, 1, -19, 5, 4, C.floor2);
+  forkEntry({ side: -1, color: 0xc9a227, color2: C.floor2 }); // 돌아가는 길은 왼쪽 (도전 별이 오른쪽)
 
   // ─── 페놀프탈레인 문 ─────────────────────────────────
   const cp1 = platform(0, Y, -27, 14, 8, C.checkpoint);

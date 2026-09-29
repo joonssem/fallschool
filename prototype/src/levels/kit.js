@@ -223,7 +223,64 @@ export function makeKit(level) {
     stars.push({ mesh, got: false });
   }
 
-  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar };
+  // 시소: 긴 판이 긴 축을 중심으로 옆으로 기운다. 올라탄 **모든 학생**의 무게로 기울기를 정한다.
+  // 기울기 목표 = -(각 학생이 가운데에서 떨어진 거리의 합) × k. 혼자면 soloMax까지, 둘 이상이면 crowdMax까지 기운다 (양쪽에 나눠 서면 합이 작아 수평)
+  // → 한쪽에 여럿이 몰리면 확 기울어 미끄러진다. 다른 학생 위치는 화면마다 같은 값(마지막 받은 위치)으로 계산한다.
+  // slope: 판 전체의 앞뒤 경사(라디안, +면 -z 쪽이 높다)
+  // crowdMax 0.95(약 54°): 미끄러지는 힘(약 초속 9m)이 걷는 힘(초속 7m)보다 커서 버틸 수 없다. 혼자일 때(soloMax)는 버틸 수 있다
+  function seesaw({ x = 0, y, z, width, length, color, slope = 0, k = 0.14, soloMax = 0.38, crowdMax = 0.95 }) {
+    const base = new THREE.Group();
+    base.position.set(x, y, z);
+    base.rotation.x = slope;
+    root.add(base);
+    const pivot = new THREE.Group();
+    base.add(pivot);
+    const plank = block(0, 0, 0, width, 0.6, length, color, { parent: pivot, dynamic: true, slippery: true, castShadow: true });
+    const col = plank.userData.collider;
+    const loc = new THREE.Vector3();
+    let angle = 0;
+    level.movers.push({
+      root: base,
+      update(t, dt, player) {
+        let torque = 0;
+        let n = 0;
+        if (player && player.ground === col) {
+          pivot.worldToLocal(loc.copy(player.pos));
+          torque += loc.x;
+          n++;
+        }
+        for (const o of level.getOthers?.() || []) {
+          pivot.worldToLocal(loc.copy(o));
+          if (Math.abs(loc.x) < width / 2 + 0.3 && Math.abs(loc.z) < length / 2 && loc.y > -0.4 && loc.y < 2) {
+            torque += loc.x;
+            n++;
+          }
+        }
+        const max = n >= 2 ? crowdMax : soloMax;
+        const target = THREE.MathUtils.clamp(-torque * k, -max, max);
+        const rate = n ? 0.4 + 0.35 * Math.min(n, 4) : 0.35; // 많이 올라탈수록 빨리 기운다
+        angle += THREE.MathUtils.clamp(target - angle, -rate * dt, rate * dt);
+        pivot.rotation.z = angle;
+      },
+    });
+    return plank;
+  }
+
+  // 갈림길 입구 (산과 염기·전기 회로 맵 공용): 출발 발판 끝(z0, 높이 0)에서 첫 체크포인트(z1, 높이 y1)까지
+  //   가운데: 외나무 시소 지름길 — 폭 1.2m, 곧게 가지만 무게로 기울어 여럿이 한꺼번에 오르면 뒤집힌다
+  //   옆(side = -1 왼쪽, 1 오른쪽): 넓은 계단으로 돌아가는 길 — 안전하지만 더 오래 걸린다 (시뮬레이션 측정값은 README)
+  // 도전 별 섬과 반대쪽에 둔다 (돌아가는 길에서 보통 점프로 별에 닿지 않게)
+  function forkEntry({ z0 = -8, z1 = -23, y1 = 1.5, side, color, color2 }) {
+    const len = Math.hypot(z0 - z1, y1);
+    seesaw({ y: y1 / 2, z: (z0 + z1) / 2, width: 1.2, length: len, color, slope: Math.atan2(y1, z0 - z1), k: 0.8, soloMax: 0.3 }); // 폭이 좁아 가운데에서 떨어진 거리가 작으므로 민감하게
+    // 지그재그 계단 세 개 (바깥으로 나갔다가 돌아온다): 틈은 모두 1m 안팎, 보통 점프로 충분
+    platform(side * 11, y1 / 3, z0 - 3.5, 4, 5, color2);
+    platform(side * 16, y1 / 2, z0 - 7.5, 4, 4, color2);
+    platform(side * 11, (y1 * 2) / 3, z0 - 11.5, 4, 4, color2);
+    sign('외나무 다리: 빠르지만 여럿이 오르면 기울어요', 0, y1 + 5.5, z1 + 0.6, { width: 9, color: '#e76f51' });
+  }
+
+  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar, seesaw, forkEntry };
 }
 
 export const GATE_DEPTH = 7;

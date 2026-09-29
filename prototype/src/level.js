@@ -37,7 +37,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   const level = createLevel(parent, world, { sectionAt: sectionFinder(SECTIONS), fanZones: [] });
   const scene = level.root;
   const { movers, checkpoints } = level;
-  const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, challengeStar } = makeKit(level);
+  const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, challengeStar, seesaw: kitSeesaw } = makeKit(level);
 
   // ─── 출발 ───────────────────────────────────────────
   platform(0, 0, 0, 16, 16, COLORS.start);
@@ -305,38 +305,12 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   challengeStar(14.5, 5, -180);
   sign('시소 다리: 가운데로 걸어라', 0, 11, -184.8, { width: 8 });
 
+  // 시소: 올라탄 모든 학생의 무게로 기운다 (한쪽에 여럿이 몰리면 확 기운다, kit.js)
   function seesaw(z) {
-    const pivot = new THREE.Group();
-    pivot.position.set(0, 5, z);
-    scene.add(pivot);
-    const plank = block(0, 0, 0, 6, 0.6, 14, COLORS.seesaw, {
-      parent: pivot,
-      dynamic: true,
-      slippery: true,
-      castShadow: true,
-    });
+    kitSeesaw({ y: 5, z, width: 6, length: 14, color: COLORS.seesaw });
     const fulcrum = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 4), mat(COLORS.pillar));
     fulcrum.position.set(0, 3.2, z);
     scene.add(fulcrum);
-    const col = plank.userData.collider;
-    const local = new THREE.Vector3();
-    let angle = 0;
-    movers.push({
-      root: pivot,
-      update(t, dt, player) {
-        let target = 0;
-        let rate = 0.35;
-        if (player && player.ground === col) {
-          local.copy(player.pos);
-          pivot.worldToLocal(local);
-          target = THREE.MathUtils.clamp(-local.x * 0.14, -0.38, 0.38);
-          rate = 0.75;
-        }
-        const d = THREE.MathUtils.clamp(target - angle, -rate * dt, rate * dt);
-        angle += d;
-        pivot.rotation.z = angle;
-      },
-    });
   }
   seesaw(-192.3);
   platform(0, 5, -203.5, 5, 7.8, COLORS.bridge);
