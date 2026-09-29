@@ -42,7 +42,9 @@ export function createLevel(parent, world, extra = {}) {
     onFinish: null,
     onTileTriggered: null,
     onMessage: null, // (text, ok) 예측 문 안내
+    onStar: null, // (모은 수, 전체 수) 도전 별
     gates: [],
+    stars: [],
     windAt: () => {},
     gravityAt: () => 1,
     setSeed(s) {
@@ -55,7 +57,7 @@ export function createLevel(parent, world, extra = {}) {
 }
 
 export function makeKit(level) {
-  const { root, world, checkpoints, gates } = level;
+  const { root, world, checkpoints, gates, stars } = level;
   const matCache = new Map();
   const mat = (color, extra = {}) => {
     const key = color + JSON.stringify(extra);
@@ -208,10 +210,23 @@ export function makeKit(level) {
     return gate;
   }
 
-  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, choiceGate };
+  // 도전 별: 길에서 벗어난 작은 섬 위의 별. 보통 점프로는 안 닿고 점프 + 다이브로 닿는 거리에 둔다.
+  // 순위·완주와 상관없는 개인 도전 (잘하는 학생용). 모은 별은 떨어져도 그대로다.
+  const starGeo = new THREE.OctahedronGeometry(0.7);
+  function challengeStar(x, y, z) {
+    platform(x, y, z, 3, 3, 0xffe066);
+    const mesh = new THREE.Mesh(starGeo, new THREE.MeshStandardMaterial({ color: 0xffd60a, emissive: 0xffb703, emissiveIntensity: 0.8 }));
+    mesh.position.set(x, y + 1.4, z);
+    mesh.castShadow = true;
+    root.add(mesh);
+    stars.push({ mesh, got: false });
+  }
+
+  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar };
 }
 
 export const GATE_DEPTH = 7;
+const _starProbe = new THREE.Vector3();
 const GATE_LANE = 4;
 
 // 시드로 예측 문의 정답 위치를 섞는다
@@ -261,10 +276,23 @@ export function finalizeLevel(level) {
       if (m.root) m.root.updateMatrixWorld(true);
     }
     if (player && level.gates.length) checkGates(level, player);
+    for (const s of level.stars) {
+      if (s.got) continue;
+      s.mesh.rotation.y = t * 2;
+      if (player && s.mesh.position.distanceTo(_starProbe.copy(player.pos).setY(player.pos.y + 0.9)) < 1.4) {
+        s.got = true;
+        s.mesh.visible = false;
+        level.onStar?.(level.stars.filter((x) => x.got).length, level.stars.length);
+      }
+    }
     world.syncDynamic();
   };
   level.resetProgress = () => {
     level.finished = false;
+    for (const s of level.stars) {
+      s.got = false;
+      s.mesh.visible = true;
+    }
     for (const cp of checkpoints) {
       cp.reached = cp.index === 0;
       cp.flag?.material.color.setHex(cp.reached ? 0x2ec4b6 : 0xcccccc);

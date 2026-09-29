@@ -57,7 +57,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar } = makeKit(level);
   const rand = mulberry32(19690720);
 
   // 구역 안내판: 길 옆(side = -1 왼쪽, 1 오른쪽)에 세우고 길 쪽을 비스듬히 바라보게 한다
@@ -67,6 +67,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // ─── 지구 발사대 ─────────────────────────────────────
   platform(0, 0, 0, 16, 16, C.earth);
   startCheckpoint('지구 발사대');
+  // 도전 별: 중력마다 닿는 거리가 다르다 — 지구 7m, 달 19.5m, 토성 8m (보통 점프로는 안 되고 점프 + 다이브로 닿는 거리)
+  challengeStar(16.5, 0, -2);
   info(-1, 0, -4, '지구', '중력의 기준 (×1)', '평소처럼 점프해요', '#2a9d8f');
   // 첫 틈은 보통 점프로 넘는 3m (예전 6m는 점프 + 다이브가 필요해 처음 하는 학생이 막혔다)
   platform(0, 1, -13.5, 8, 7, C.earth2);
@@ -84,6 +86,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // 로켓 착지에 여유를 두려고 앞뒤로 길게 (-31 ~ -47), 끝에 예측 문
   const m1 = platform(0, 8, -39, 14, 16, C.checkpoint);
   checkpoint(m1, new THREE.Vector3(0, 8, -36), '달 도착');
+  challengeStar(-28, 8, -39); // 달: 19.5m (도움 점프로 보통 점프를 해도 안 닿게)
   choiceGate({
     z: -47,
     y: 8,
@@ -245,6 +248,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // ─── 토성 고리: 다리를 건너며 도는 고리 조각을 넘거나 틈으로 지나기 ──
   const m5 = platform(0, 11, -251, 12, 8, C.checkpoint);
   checkpoint(m5, new THREE.Vector3(0, 11, -251), '토성 앞');
+  challengeStar(15.5, 11, -251);
   choiceGate({
     z: -255,
     y: 11,

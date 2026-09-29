@@ -42,6 +42,7 @@ export class Player {
     this.ground = null;
     this.groundNormal = new THREE.Vector3(0, 1, 0);
     this.state = 'normal'; // normal | dive | getup | tumble
+    this.jumpBoost = 1; // 도움 점프 (같은 곳에서 여러 번 떨어진 학생)
     this.stateTimer = 0;
     this.coyote = 0;
     this.jumpBuffer = 0;
@@ -206,7 +207,7 @@ export class Player {
 
     // 5. 점프
     if (this.jumpBuffer > 0 && this.coyote > 0 && this.state === 'normal') {
-      this.vel.y = T.jumpSpeed;
+      this.vel.y = T.jumpSpeed * this.jumpBoost;
       this.jumpBuffer = 0;
       this.coyote = 0;
       this.grounded = false;

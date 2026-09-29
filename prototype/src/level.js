@@ -37,7 +37,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   const level = createLevel(parent, world, { sectionAt: sectionFinder(SECTIONS), fanZones: [] });
   const scene = level.root;
   const { movers, checkpoints } = level;
-  const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
+  const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, challengeStar } = makeKit(level);
 
   // ─── 출발 ───────────────────────────────────────────
   platform(0, 0, 0, 16, 16, COLORS.start);
@@ -61,6 +61,8 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // ─── 체크포인트 1 + 숨은 발판 ─────────────────────────
   const cp1 = platform(0, 5, -40, 14, 10, COLORS.checkpoint);
   checkpoint(cp1, new THREE.Vector3(0, 5, -40), '숨은 발판 앞');
+  // 도전 별: 발판 끝에서 7m(지구 중력) — 보통 점프 최대 5.5m, 점프 + 다이브 최대 8.5m (시뮬레이션 측정)
+  challengeStar(15.5, 5, -40);
   sign('숨은 발판: 진짜 길을 찾아라!', 0, 11, -44.5, { width: 9 });
 
   // 장식용 난수는 코스 시드와 분리 (방마다 배경이 달라지지 않게)
@@ -162,6 +164,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // ─── 체크포인트 2 + 회전 막대 광장 ──────────────────────
   const cp2 = platform(0, 5, -72, 14, 10, COLORS.checkpoint);
   checkpoint(cp2, new THREE.Vector3(0, 5, -72), '회전 막대 앞');
+  challengeStar(-15.5, 5, -72);
   platform(0, 5, -79.5, 5, 5, COLORS.bridge);
   platform(0, 5, -95, 15, 26, COLORS.plaza);
   sign('회전 막대: 낮은 건 넘고, 높은 건 피하라!', 0, 11, -76.8, { width: 10 });
@@ -299,6 +302,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // ─── 체크포인트 4 + 시소 다리 ──────────────────────────
   const cp4 = platform(0, 5, -180, 12, 10, COLORS.checkpoint);
   checkpoint(cp4, new THREE.Vector3(0, 5, -180), '시소 다리 앞');
+  challengeStar(14.5, 5, -180);
   sign('시소 다리: 가운데로 걸어라', 0, 11, -184.8, { width: 8 });
 
   function seesaw(z) {

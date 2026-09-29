@@ -44,7 +44,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar } = makeKit(level);
   const Y = 1.5; // 코스 대부분의 높이
 
   // 비커: 받침대(충돌) 위에 유리 + 색 있는 용액. 문 앞에서 "이 색"을 눈으로 보여 준다.
@@ -75,6 +75,8 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   // ─── 페놀프탈레인 문 ─────────────────────────────────
   const cp1 = platform(0, Y, -27, 14, 8, C.checkpoint);
   checkpoint(cp1, new THREE.Vector3(0, Y, -25), '페놀프탈레인 문 앞');
+  // 도전 별: 발판 끝에서 7m(지구 중력) — 보통 점프 최대 5.5m, 점프 + 다이브 최대 8.5m (시뮬레이션 측정)
+  challengeStar(15.5, Y, -27);
   beaker(-5.5, Y, -25.5, 0xe5487a); // 문 앞을 막지 않게 뒤쪽에
   choiceGate({
     z: -31,
@@ -140,14 +142,15 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   // 식초 웅덩이: 입구 발판(-38 ~ -44) → 발판 5줄 (-44.5 ~ -57.7)
   // 입구 발판은 발판 5칸 너비(13.2)보다 넓게: 끝 칸이 안전한 칸이어도 옆으로 떨어지지 않고 간다
   const cpA = platform(0, Y, -41, 14, 6, C.floor2);
-  checkpoint(cpA, new THREE.Vector3(0, Y, -40), '식초 웅덩이 앞');
+  // 리트머스 발판에서 떨어지는 건 조작이 아니라 판단 문제라 도움 점프를 켜지 않는다
+  checkpoint(cpA, new THREE.Vector3(0, Y, -40), '식초 웅덩이 앞').noHelp = true;
   sideSign(-1, Y, -41, ['식초 웅덩이', '식초에 넣은 리트머스 종이와', '같은 색 발판만 버텨요'], '#b08900');
   litmusField(-45.7, 'red', '식초', '앗, 녹았어요! 식초는 산성 용액이에요. 산성 용액에서 리트머스 종이는 무슨 색이 됐지?');
   pool(-44, -58, C.vinegar);
 
   // 비눗물 웅덩이: 입구 발판(-58 ~ -64) → 발판 5줄 (-64.5 ~ -77.7)
   const cpB = platform(0, Y, -61, 14, 6, C.floor2);
-  checkpoint(cpB, new THREE.Vector3(0, Y, -60), '비눗물 웅덩이 앞');
+  checkpoint(cpB, new THREE.Vector3(0, Y, -60), '비눗물 웅덩이 앞').noHelp = true;
   sideSign(1, Y, -61, ['비눗물 웅덩이', '비눗물에 넣은 리트머스 종이와', '같은 색 발판만 버텨요'], '#1d4ed8');
   litmusField(-65.7, 'blue', '비눗물', '앗, 녹았어요! 비눗물은 염기성 용액이에요. 염기성 용액에서 리트머스 종이는 무슨 색이 됐지?');
   pool(-64, -78, C.soap);
@@ -180,6 +183,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   // ─── 붉은 양배추 문 ──────────────────────────────────
   const cp3 = platform(0, Y, -82, 14, 8, C.checkpoint);
   checkpoint(cp3, new THREE.Vector3(0, Y, -80), '붉은 양배추 문 앞');
+  challengeStar(-15.5, Y, -82);
   beaker(5.5, Y, -80.5, 0xffd60a);
   choiceGate({
     z: -86,
@@ -195,6 +199,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   // ─── 유리 막대 젓기: 도는 막대를 뛰어넘기 ─────────────────
   const plaza = platform(0, Y, -102, 14, 18, C.floor);
   checkpoint(plaza, new THREE.Vector3(0, Y, -94), '유리 막대 젓기');
+  challengeStar(15.5, Y, -102);
   sign('유리 막대로 젓는 중! 뛰어넘어요', 0, Y + 5.5, -93.3, { width: 7, color: '#0e7490' });
   const stir = new THREE.Group();
   stir.position.set(0, 0, -102);

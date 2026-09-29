@@ -93,6 +93,10 @@ function loadMap(id, seed = Date.now() >>> 0) {
   level.onFinish = onFinish;
   level.onTileTriggered = (i) => net.room?.triggerTile(i);
   level.onMessage = (text, ok) => toast(text, { seconds: 4.5, tone: ok ? 'ok' : 'retry' });
+  level.onStar = (n, total) => {
+    toast(`도전 별 ${n} / ${total}!`);
+    sfx.play('checkpoint');
+  };
   // 협동 장치(스위치 발판)용: 다른 학생의 마지막 받은 위치와 방 안 학생 수. 화면마다 같은 값으로 계산한다.
   level.getOthers = () => Array.from(crowd.avatars.values(), (a) => a.target);
   level.getPlayerCount = () => crowd.avatars.size + (net.mode === 'teacher' ? 0 : 1);
@@ -135,7 +139,12 @@ const game = {
   respawning: 0,
   race: null,
   finishMs: 0,
+  stuckCp: -1, // 도움 점프: 같은 체크포인트에서 떨어진 횟수
+  stuckFalls: 0,
 };
+
+const HELP_AFTER_FALLS = 3;
+const HELP_JUMP = 1.15;
 const cam = { yaw: 0, pitch: 0.38, dist: 8.5, cur: 8.5, target: new THREE.Vector3() };
 
 const currentCheckpoint = () => level.checkpoints[game.cpIndex];
@@ -161,6 +170,13 @@ function respawnAtCheckpoint(countFall) {
   if (countFall) {
     game.falls++;
     if (net.mode === 'student' && phase() === 'racing') net.room.publishProgress({ falls: game.falls });
+    // 같은 체크포인트에서 여러 번 떨어지면 다음 체크포인트까지 점프를 조금 높고 멀게 (본인 화면에서만)
+    if (game.stuckCp !== game.cpIndex) (game.stuckCp = game.cpIndex), (game.stuckFalls = 0);
+    game.stuckFalls++;
+    if (game.stuckFalls >= HELP_AFTER_FALLS && player.jumpBoost === 1 && !cp.noHelp) {
+      player.jumpBoost = HELP_JUMP;
+      toast('도움 점프가 켜졌어요! 다음 체크포인트까지 점프가 조금 더 높아요', { seconds: 3.5 });
+    }
   }
   player.respawn(game.cpIndex === 0 ? startSpot() : cp.respawn, 0);
   cam.yaw = 0;
@@ -174,12 +190,18 @@ function resetRun() {
   game.elapsed = 0;
   game.finishMs = 0;
   game.timerStarted = false;
+  game.stuckCp = -1;
+  game.stuckFalls = 0;
+  player.jumpBoost = 1;
   $('overlay-finish').classList.add('hidden');
   respawnAtCheckpoint(false);
 }
 
 function onCheckpoint(cp) {
-  if (cp.index > game.cpIndex) game.cpIndex = cp.index;
+  if (cp.index > game.cpIndex) {
+    game.cpIndex = cp.index;
+    player.jumpBoost = 1; // 새 체크포인트에 오면 도움 점프는 끝
+  }
   toast(`체크포인트! (${cp.name})`);
   sfx.play('checkpoint');
   if (net.mode === 'student' && phase() === 'racing') net.room.publishProgress({ cp: game.cpIndex });
@@ -216,6 +238,9 @@ function showFinish(title, seconds, again) {
   $('finish-title').textContent = title;
   $('result-time').textContent = seconds > 0 ? formatTime(seconds) : '—';
   $('result-falls').textContent = `${game.falls}번`;
+  const got = level.stars.filter((s) => s.got).length;
+  $('result-stars-row').classList.toggle('hidden', !level.stars.length);
+  $('result-stars').textContent = `${got} / ${level.stars.length}개`;
   $('btn-again').classList.toggle('hidden', !again);
   setTimeout(() => $('overlay-finish').classList.remove('hidden'), 900);
 }

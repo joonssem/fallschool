@@ -40,7 +40,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate, challengeStar } = makeKit(level);
   const Y = 1.5;
   const doors = [];
 
@@ -127,6 +127,8 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   // ─── 회로 잇기: 스위치 1개 ───────────────────────────────
   const s1 = platform(0, Y, -30, 14, 14, C.floor);
   checkpoint(s1, new THREE.Vector3(0, Y, -25), '회로 잇기');
+  // 도전 별: 발판 끝에서 7m(지구 중력) — 보통 점프 최대 5.5m, 점프 + 다이브 최대 8.5m (시뮬레이션 측정)
+  challengeStar(-15.5, Y, -30);
   sign('회로 잇기', 7.5, Y + 3.4, -29, { width: 6, color: '#118ab2', lines: ['회로 잇기', '스위치를 눌러', '전구에 불을 켜요'], rotY: -0.45 });
   switchDoor({
     z: -37,
@@ -140,6 +142,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   // ─── 직렬 스위치 문: 세 스위치를 모두 ─────────────────────
   const s2 = platform(0, Y, -50, 22, 24, C.floor);
   checkpoint(s2, new THREE.Vector3(0, Y, -39.5), '직렬 스위치 문');
+  challengeStar(19.5, Y, -50);
   sign('직렬 연결', -11.5, Y + 3.4, -42, { width: 6, color: '#ef476f', lines: ['직렬 연결 스위치 문', '스위치 세 개가', '한 줄로 이어져 있어요'], rotY: 0.45 });
   switchDoor({
     z: -62,
@@ -153,6 +156,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   // ─── 병렬 스위치 문: 하나만 눌러도 ────────────────────────
   const s3 = platform(0, Y, -73, 22, 20, C.floor);
   checkpoint(s3, new THREE.Vector3(0, Y, -64.5), '병렬 스위치 문');
+  challengeStar(-19.5, Y, -73);
   sign('병렬 연결', 11.5, Y + 3.4, -65, { width: 6, color: '#06d6a0', lines: ['병렬 연결 스위치 문', '스위치 세 개가', '나란히 이어져 있어요'], rotY: -0.45 });
   switchDoor({
     z: -83,
