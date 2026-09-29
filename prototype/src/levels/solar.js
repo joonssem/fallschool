@@ -1,20 +1,22 @@
 // 맵 2: "태양계 중력 달리기"
 // 구역마다 중력이 다르다. 실제 값을 그대로 쓰면 조작이 어려워 게임용으로 조정했고, 안내판에 실제 값을 함께 적는다.
 // 구간: 지구 발사대 → 달 크레이터 → 화성 모래 폭풍 → 소행성대 → 목성 소용돌이 → 토성 고리 → 우주 정거장
+// 달·화성·목성·토성 입구에는 예측 문이 있다: 그 행성의 중력을 예측해 맞는 문으로 들어가야 한다.
+// 실제 중력 안내판은 문 뒤에 두어, 예측 → 몸으로 확인 → 실제 값 확인 순서가 되게 한다.
 //
 // 점프 거리 참고 (최고 속도 7m/s): 지구 약 5m, 달 약 16m, 화성 약 12m, 소행성대 약 10m, 목성 약 3m, 토성 약 6m
 import * as THREE from 'three';
-import { mulberry32, createLevel, makeKit, finalizeLevel } from './kit.js';
+import { mulberry32, createLevel, makeKit, finalizeLevel, shuffleGates } from './kit.js';
 
 // 중력 배율(지구 = 1). z가 zMax보다 작아지면 그 구역.
 const ZONES = [
   { name: '지구', zMax: Infinity, g: 1 },
   { name: '달', zMax: -28, g: 0.33 },
-  { name: '화성', zMax: -99, g: 0.45 },
-  { name: '소행성대', zMax: -145, g: 0.5 },
-  { name: '목성', zMax: -188, g: 1.6 },
-  { name: '토성', zMax: -222, g: 0.9 },
-  { name: '우주 정거장', zMax: -258, g: 1 },
+  { name: '화성', zMax: -110, g: 0.45 },
+  { name: '소행성대', zMax: -163, g: 0.5 },
+  { name: '목성', zMax: -206, g: 1.6 },
+  { name: '토성', zMax: -247, g: 0.9 },
+  { name: '우주 정거장', zMax: -290, g: 1 },
 ];
 
 function zoneAt(z) {
@@ -55,7 +57,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   });
   const root = level.root;
   const { movers } = level;
-  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
+  const { mat, block, platform, sign, startCheckpoint, checkpoint, finishPad, choiceGate } = makeKit(level);
   const rand = mulberry32(19690720);
 
   // 구역 안내판: 길 옆(side = -1 왼쪽, 1 오른쪽)에 세우고 길 쪽을 비스듬히 바라보게 한다
@@ -66,7 +68,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   platform(0, 0, 0, 16, 16, C.earth);
   startCheckpoint('지구 발사대');
   info(-1, 0, -4, '지구', '중력의 기준 (×1)', '평소처럼 점프해요', '#2a9d8f');
-  platform(0, 1, -12, 8, 4, C.earth2);
+  // 첫 틈은 보통 점프로 넘는 3m (예전 6m는 점프 + 다이브가 필요해 처음 하는 학생이 막혔다)
+  platform(0, 1, -13.5, 8, 7, C.earth2);
   platform(0, 2, -24, 8, 8, C.earth);
   const rocket = block(0, 2.25, -25, 2.6, 0.25, 2.6, C.pad, { kind: 'bounce', bounceSpeed: 20 });
   rocket.material = mat(C.pad, { emissive: 0x661133 });
@@ -78,15 +81,26 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   }
 
   // ─── 달 크레이터: 멀리 날아가는 점프 ───────────────────
-  const m1 = platform(0, 8, -37, 14, 12, C.checkpoint);
+  // 로켓 착지에 여유를 두려고 앞뒤로 길게 (-31 ~ -47), 끝에 예측 문
+  const m1 = platform(0, 8, -39, 14, 16, C.checkpoint);
   checkpoint(m1, new THREE.Vector3(0, 8, -36), '달 도착');
-  info(1, 8, -41, '달', '실제 중력: 지구의 약 1/6', '게임 중력: 약 1/3 (조작을 위해 조정)');
-  platform(-2, 9, -57, 8, 12, C.moon);
-  platform(2, 10, -75, 8, 8, C.moonDark);
-  block(2, 13.5, -78.5, 8, 3.5, 1, C.moonDark, { castShadow: true });
-  sign('달에서는 이 벽도 넘을 수 있어요', 2, 16.5, -77.9, { width: 7 });
-  platform(0, 10, -89, 12, 20, C.moon);
-  for (const [x, y, z, r] of [[-4, 8, -35, 1.4], [4.5, 8, -39, 1], [-2, 9, -58, 1.6], [3, 10, -92, 1.8], [-3, 10, -86, 1.1]]) {
+  choiceGate({
+    z: -47,
+    y: 8,
+    question: '달에서 점프하면 어떻게 될까?',
+    hint: '힌트: 달은 지구보다 훨씬 작아요',
+    options: [{ text: '지구보다 높이', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 낮게' }],
+    right: '정답! 달은 작아서 끌어당기는 힘(중력)이 약해요. 지구의 약 1/6이라 훨씬 높이 뛰어요',
+    wrong: '다시! 달은 지구보다 훨씬 작아요. 작은 천체는 끌어당기는 힘이 어떨까?',
+  });
+  // 문 뒤(-54)부터: 예전 좌표에서 11만큼 뒤로 민 값
+  info(1, 9, -52, '달', '실제 중력: 지구의 약 1/6', '게임 중력: 약 1/3 (조작을 위해 조정)');
+  platform(-2, 9, -68, 8, 12, C.moon);
+  platform(2, 10, -86, 8, 8, C.moonDark);
+  block(2, 13.5, -89.5, 8, 3.5, 1, C.moonDark, { castShadow: true });
+  sign('달에서는 이 벽도 넘을 수 있어요', 2, 16.5, -88.9, { width: 7 });
+  platform(0, 10, -100, 12, 20, C.moon);
+  for (const [x, y, z, r] of [[-4, 8, -35, 1.4], [4.5, 8, -39, 1], [-2, 9, -69, 1.6], [3, 10, -103, 1.8], [-3, 10, -97, 1.1]]) {
     const crater = new THREE.Mesh(new THREE.TorusGeometry(r, 0.18, 6, 18), mat(C.moonDark));
     crater.rotation.x = -Math.PI / 2;
     crater.position.set(x, y + 0.05, z);
@@ -94,20 +108,30 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   }
 
   // ─── 화성 모래 폭풍 ──────────────────────────────────
-  const m2 = platform(0, 10, -103, 12, 8, C.checkpoint);
-  checkpoint(m2, new THREE.Vector3(0, 10, -103), '화성 도착');
-  info(-1, 10, -106, '화성', '실제 중력: 지구의 약 0.38배', '게임 중력: 약 0.45배');
-  platform(0, 10, -122, 4, 30, C.mars);
-  sign('모래 폭풍: 바위 옆에서 버텨요', 0, 15, -106.6, { width: 6.5, color: '#b85c44' });
+  const m2 = platform(0, 10, -114, 12, 8, C.checkpoint);
+  checkpoint(m2, new THREE.Vector3(0, 10, -114), '화성 도착');
+  choiceGate({
+    z: -118,
+    y: 10,
+    question: '화성의 중력은 지구와 비교하면?',
+    hint: '힌트: 화성은 지구의 절반쯤 되는 크기예요',
+    options: [{ text: '지구보다 약해요', correct: true }, { text: '지구와 같아요' }, { text: '지구보다 세요' }],
+    right: '정답! 화성은 지구보다 작아서 중력이 약해요 (지구의 약 0.38배)',
+    wrong: '다시! 화성은 지구의 절반쯤 되는 크기예요. 크기가 작으면 중력은?',
+  });
+  // 문 뒤(-125)부터: 예전 좌표에서 18만큼 뒤로 민 값
+  info(-1, 10, -119, '화성', '실제 중력: 지구의 약 0.38배', '게임 중력: 약 0.45배');
+  platform(0, 10, -140, 4, 30, C.mars);
+  sign('모래 폭풍: 바위 옆에서 버텨요', 0, 15, -125.6, { width: 6.5, color: '#b85c44' });
   // 바람이 불어 가는 쪽 가장자리의 바위
-  block(1.8, 11, -112, 0.4, 1, 2.5, C.marsDark);
-  block(1.8, 11, -118, 0.4, 1, 2.5, C.marsDark);
-  block(-1.8, 11, -127, 0.4, 1, 2.5, C.marsDark);
-  block(-1.8, 11, -133, 0.4, 1, 2.5, C.marsDark);
+  block(1.8, 11, -130, 0.4, 1, 2.5, C.marsDark);
+  block(1.8, 11, -136, 0.4, 1, 2.5, C.marsDark);
+  block(-1.8, 11, -145, 0.4, 1, 2.5, C.marsDark);
+  block(-1.8, 11, -151, 0.4, 1, 2.5, C.marsDark);
 
   const storms = [
-    { zMin: -122, zMax: -107, dir: 1, offset: 0, strength: 0 },
-    { zMin: -137, zMax: -122, dir: -1, offset: 2, strength: 0 },
+    { zMin: -140, zMax: -125, dir: 1, offset: 0, strength: 0 },
+    { zMin: -155, zMax: -140, dir: -1, offset: 2, strength: 0 },
   ];
   for (const st of storms) {
     const COUNT = 50;
@@ -142,12 +166,12 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   };
 
   // ─── 소행성대: 가운데 바위를 딛고 건너기, 아래에는 궤도를 도는 안전망 발판 ──
-  const m3 = platform(0, 10, -141, 10, 8, C.checkpoint);
-  checkpoint(m3, new THREE.Vector3(0, 10, -141), '소행성대 앞');
-  info(1, 10, -144, '소행성대', '화성과 목성 사이의 작은 천체들', '게임 중력: 약 0.5배', '#8d6e63');
-  platform(0, 10, -155, 6, 6, C.rock);
+  const m3 = platform(0, 10, -159, 10, 8, C.checkpoint);
+  checkpoint(m3, new THREE.Vector3(0, 10, -159), '소행성대 앞');
+  info(1, 10, -162, '소행성대', '화성과 목성 사이의 작은 천체들', '게임 중력: 약 0.5배', '#8d6e63');
+  platform(0, 10, -173, 6, 6, C.rock);
   const orbit = new THREE.Group();
-  orbit.position.set(0, 8, -155);
+  orbit.position.set(0, 8, -173);
   root.add(orbit);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
@@ -159,11 +183,11 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
       orbit.rotation.y = t * 0.4;
     },
   });
-  platform(0, 10, -169, 10, 8, C.rock);
+  platform(0, 10, -187, 10, 8, C.rock);
   const rockGeo = new THREE.DodecahedronGeometry(1.05, 0);
   const hidden = new THREE.MeshBasicMaterial({ visible: false });
   // 착지 구역(섬 앞쪽)은 비워 두고 뒤쪽에서 굴러다닌다
-  [[-169.3, 0], [-171.7, Math.PI]].forEach(([z, phase]) => {
+  [[-187.3, 0], [-189.7, Math.PI]].forEach(([z, phase]) => {
     const box = block(0, 11.6, z, 1.6, 1.6, 1.6, 0, { kind: 'bumper', dynamic: true, material: hidden });
     const rock = new THREE.Mesh(rockGeo, mat(0x6d4c41));
     rock.castShadow = true;
@@ -178,14 +202,25 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   });
 
   // ─── 목성 소용돌이: 점프가 낮다 ─────────────────────────
-  const m4 = platform(0, 9, -184, 12, 8, C.checkpoint);
-  checkpoint(m4, new THREE.Vector3(0, 9, -184), '목성 앞');
-  info(-1, 9, -187, '목성', '실제 중력: 지구의 약 2.5배', '게임 중력: 1.6배 (점프가 낮아요)', '#e76f51');
-  platform(0, 9, -191.5, 6, 7, C.jupiter);
+  const m4 = platform(0, 9, -202, 12, 8, C.checkpoint);
+  checkpoint(m4, new THREE.Vector3(0, 9, -202), '목성 앞');
+  choiceGate({
+    z: -206,
+    y: 9,
+    question: '목성에서 점프하면 어떻게 될까?',
+    hint: '힌트: 목성은 태양계에서 가장 큰 행성이에요',
+    options: [{ text: '지구보다 낮게', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 높이' }],
+    right: '정답! 목성은 아주 커서 중력이 세요 (지구의 약 2.5배). 점프가 낮아져요',
+    wrong: '다시! 목성은 태양계에서 가장 큰 행성이에요. 끌어당기는 힘이 어떨까?',
+    color: '#e76f51',
+  });
+  // 문 뒤(-213)부터: 예전 좌표에서 25만큼 뒤로 민 값
+  info(-1, 9, -207, '목성', '실제 중력: 지구의 약 2.5배', '게임 중력: 1.6배 (점프가 낮아요)', '#e76f51');
+  platform(0, 9, -216.5, 6, 7, C.jupiter);
   // 정팔각형 회전판: 길이 2R·폭 2R·tan(22.5°) 직사각형 4장을 45°씩 돌려 겹치면 정팔각형이 된다.
   // 다리와의 틈이 거의 일정하다 (반지름 R=6, 꼭짓점까지 6.49)
   const swirl = new THREE.Group();
-  swirl.position.set(0, 9, -201.6);
+  swirl.position.set(0, 9, -226.6);
   root.add(swirl);
   const R = 6;
   const side = 2 * R * Math.tan(Math.PI / 8);
@@ -194,7 +229,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     plate.rotation.y = (i * Math.PI) / 4;
     plate.position.y -= i * 0.004; // 겹친 면이 깜박이지 않게
   }
-  sign('대적점 소용돌이', 0, 14, -194.8, { width: 5, color: '#e76f51' });
+  sign('대적점 소용돌이', 0, 14, -219.8, { width: 5, color: '#e76f51' });
   movers.push({
     root: swirl,
     update(t) {
@@ -203,17 +238,28 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   });
   // 붙어 있는 높은 계단: 떨어질 걱정은 없지만 낮은 점프로 한 칸씩 겨우 오른다
   // 첫 칸은 회전판 꼭짓점(반지름 6.49) 바로 뒤에서 시작해 틈에 빠지지 않게 한다
-  platform(0, 9.7, -209.7, 6, 3, C.jupiter);
-  platform(0, 10.4, -212.7, 6, 3, C.jupiter2);
-  platform(0, 11.1, -218.1, 6, 7.8, C.jupiter);
+  platform(0, 9.7, -234.7, 6, 3, C.jupiter);
+  platform(0, 10.4, -237.7, 6, 3, C.jupiter2);
+  platform(0, 11.1, -243.1, 6, 7.8, C.jupiter);
 
   // ─── 토성 고리: 다리를 건너며 도는 고리 조각을 넘거나 틈으로 지나기 ──
-  const m5 = platform(0, 11, -226, 12, 8, C.checkpoint);
-  checkpoint(m5, new THREE.Vector3(0, 11, -226), '토성 앞');
-  info(1, 11, -229, '토성', '실제 중력: 지구의 약 1.07배', '게임 중력: 0.9배', '#b08900');
-  platform(0, 11, -244, 4, 28, C.station);
+  const m5 = platform(0, 11, -251, 12, 8, C.checkpoint);
+  checkpoint(m5, new THREE.Vector3(0, 11, -251), '토성 앞');
+  choiceGate({
+    z: -255,
+    y: 11,
+    question: '토성의 중력은 어느 정도일까?',
+    hint: '힌트: 토성은 크지만 물에 뜰 만큼 가벼워요',
+    options: [{ text: '지구와 비슷해요', correct: true }, { text: '목성만큼 세요' }, { text: '달처럼 약해요' }],
+    right: '정답! 토성은 크지만 가벼운 기체로 되어 있어서 중력이 지구와 비슷해요 (약 1.07배)',
+    wrong: '다시! 크기만 보면 안 돼요. 토성은 크지만 물에 뜰 만큼 가벼워요',
+    color: '#b08900',
+  });
+  // 문 뒤(-262)부터: 예전 좌표에서 32만큼 뒤로 민 값
+  info(1, 11, -256, '토성', '실제 중력: 지구의 약 1.07배', '게임 중력: 0.9배', '#b08900');
+  platform(0, 11, -276, 4, 28, C.station);
   const ring = new THREE.Group();
-  ring.position.set(0, 11.6, -242);
+  ring.position.set(0, 11.6, -274);
   root.add(ring);
   const SEGMENTS = 12;
   for (let i = 0; i < SEGMENTS; i++) {
@@ -232,16 +278,16 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
       ring.rotation.y = t * 0.3;
     },
   });
-  sign('고리 조각은 뛰어넘거나 틈으로!', 0, 16, -230.4, { width: 6, color: '#b08900' });
+  sign('고리 조각은 뛰어넘거나 틈으로!', 0, 16, -262.4, { width: 6, color: '#b08900' });
 
   // ─── 우주 정거장 (골인) ───────────────────────────────
-  const station = platform(0, 11, -266, 14, 12, C.station);
-  for (const sx of [-1, 1]) block(sx * 6.4, 18, -262, 1, 7, 1, C.accent, { castShadow: true });
+  const station = platform(0, 11, -298, 14, 12, C.station);
+  for (const sx of [-1, 1]) block(sx * 6.4, 18, -294, 1, 7, 1, C.accent, { castShadow: true });
   const arch = new THREE.Mesh(new THREE.BoxGeometry(13.8, 0.8, 1), mat(C.accent));
-  arch.position.set(0, 18.4, -262);
+  arch.position.set(0, 18.4, -294);
   root.add(arch);
-  sign('우주 정거장 도착!', 0, 19.6, -261.45, { width: 6, color: '#118ab2' });
-  finishPad(station, -262);
+  sign('우주 정거장 도착!', 0, 19.6, -293.45, { width: 6, color: '#118ab2' });
+  finishPad(station, -294);
 
   // ─── 배경: 별, 행성 ──────────────────────────────────
   const starPos = new Float32Array(900 * 3);
@@ -249,7 +295,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     const u = rand() * 2 - 1;
     const th = rand() * Math.PI * 2;
     const s = Math.sqrt(1 - u * u);
-    starPos.set([Math.cos(th) * s * 320, u * 256 + 40, Math.sin(th) * s * 320 - 140], i * 3);
+    starPos.set([Math.cos(th) * s * 320, u * 256 + 40, Math.sin(th) * s * 320 - 160], i * 3);
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
@@ -265,12 +311,17 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     return m;
   };
   planet(26, 0x3a86ff, 0, -34, 10); // 지구 (발밑)
-  planet(12, 0xbfc3cc, -45, -8, -60); // 달
-  planet(10, 0xc1440e, 48, 2, -120); // 화성
-  planet(30, 0xd4a373, 85, 5, -205); // 목성
-  planet(6.5, 0xe9c46a, 0, 2, -242); // 토성 (다리 아래, 고리 한가운데)
-  planet(14, 0xffd166, -170, 70, -160, { emissive: 0xffb703, emissiveIntensity: 1 }); // 태양
+  planet(12, 0xbfc3cc, -45, -8, -71); // 달
+  planet(10, 0xc1440e, 48, 2, -138); // 화성
+  planet(30, 0xd4a373, 85, 5, -230); // 목성
+  planet(6.5, 0xe9c46a, 0, 2, -274); // 토성 (다리 아래, 고리 한가운데)
+  planet(14, 0xffd166, -170, 70, -180, { emissive: 0xffb703, emissiveIntensity: 1 }); // 태양
 
+  // 경기마다 예측 문의 정답 위치를 섞는다
+  level.setSeed = (s) => {
+    level.seed = s;
+    shuffleGates(level, s);
+  };
   level.setSeed(seed);
   return finalizeLevel(level);
 }

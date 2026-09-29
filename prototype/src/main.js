@@ -92,6 +92,7 @@ function loadMap(id, seed = Date.now() >>> 0) {
   level.onCheckpoint = onCheckpoint;
   level.onFinish = onFinish;
   level.onTileTriggered = (i) => net.room?.triggerTile(i);
+  level.onMessage = (text, ok) => toast(text, { seconds: 4.5, tone: ok ? 'ok' : 'retry' });
   const sky = level.sky;
   scene.background = new THREE.Color(sky.background);
   scene.fog = new THREE.Fog(...sky.fog);
@@ -523,11 +524,13 @@ function formatTime(t) {
 }
 
 let toastTimer = 0;
-function toast(text) {
+function toast(text, { seconds = 1.8, tone = '' } = {}) {
   const el = $('toast');
   el.textContent = text;
+  el.classList.toggle('long', seconds > 2);
+  el.classList.toggle('retry', tone === 'retry');
   el.classList.add('show');
-  toastTimer = 1.8;
+  toastTimer = seconds;
 }
 
 $('btn-restart').addEventListener('click', () => {

@@ -3,7 +3,7 @@
 // 모든 맵(build 함수)은 다음을 갖춘 level 객체를 돌려준다.
 //   root, spawn, checkpoints, update(t, dt, player), resetProgress(), sectionAt(z),
 //   windAt(pos, out), gravityAt(pos), setSeed(seed), triggerTile(i), revealPath(), sky
-//   콜백: onCheckpoint(cp), onFinish(), onTileTriggered(i)
+//   콜백: onCheckpoint(cp), onFinish(), onTileTriggered(i), onMessage(text, ok)
 import * as THREE from 'three';
 import { BoxCollider } from '../physics.js';
 
@@ -41,6 +41,8 @@ export function createLevel(parent, world, extra = {}) {
     onCheckpoint: null,
     onFinish: null,
     onTileTriggered: null,
+    onMessage: null, // (text, ok) 예측 문 안내
+    gates: [],
     windAt: () => {},
     gravityAt: () => 1,
     setSeed(s) {
@@ -53,7 +55,7 @@ export function createLevel(parent, world, extra = {}) {
 }
 
 export function makeKit(level) {
-  const { root, world, checkpoints } = level;
+  const { root, world, checkpoints, gates } = level;
   const matCache = new Map();
   const mat = (color, extra = {}) => {
     const key = color + JSON.stringify(extra);
@@ -154,7 +156,100 @@ export function makeKit(level) {
     };
   }
 
-  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad };
+  // 예측 문: 벽에 커튼 문 3개, 질문에 맞는 문 뒤에만 바닥이 있다 (틀린 문 뒤는 떨어진다)
+  // z = 벽 앞면, y = 바닥 높이. 벽 1 + 통로 4 + 나오는 발판 2 → z - GATE_DEPTH 에서 다음 발판으로 이어진다.
+  // 나오는 발판은 폭 전체라서 옆 문이 정답이어도 가운데 길로 이어진다.
+  // 조작 실력으로 돌아갈 수 없게 벽을 높고 넓게, 통로 위는 지붕으로 막는다 (달 중력 점프로도 못 넘는다).
+  // 어느 문이 정답인지는 경기 시드로 섞는다 (같은 방이면 모두 같은 배치).
+  function choiceGate({ z, y, question, hint, options, right, wrong, color = '#6a4c93' }) {
+    const DOOR = 3;
+    const DOOR_H = 2.4; // 캐릭터 키 1.7. 낮을수록 문 위 질문이 눈높이에 가깝다
+    const PILLAR = 1.2;
+    const H = 10;
+    const wallColor = 0x3d405b;
+    const doorX = [-(DOOR + PILLAR), 0, DOOR + PILLAR];
+    const inner = (3 * DOOR + 4 * PILLAR) / 2; // 6.9
+    const zl = z - 1 - GATE_LANE / 2; // 통로 가운데
+    const zEnd = z - 1 - GATE_LANE; // 통로 끝 = 나오는 발판 시작
+
+    // 문턱(벽 두께만큼의 바닥)과 기둥·문 위 벽·양옆 날개
+    platform(0, y, z - 0.5, inner * 2, 1, 0x9aa0b5);
+    for (const px of [-inner + PILLAR / 2, -DOOR / 2 - PILLAR / 2, DOOR / 2 + PILLAR / 2, inner - PILLAR / 2]) {
+      block(px, y + H, z - 0.5, PILLAR, H + 6, 1, wallColor, { castShadow: true });
+      block(px, y + H, zl, PILLAR, H + 6, GATE_LANE, wallColor); // 통로 칸막이 (아래로도 길게)
+    }
+    block(0, y + H, z - 0.5, inner * 2, H - DOOR_H, 1, wallColor, { castShadow: true });
+    for (const sx of [-1, 1]) block(sx * (inner + 5.5), y + H, z - 0.5, 11, H + 2, 1, wallColor, { castShadow: true });
+    block(0, y + H + 0.4, zl, inner * 2, 0.4, GATE_LANE, wallColor); // 지붕: 위에서 들여다보거나 넘어가지 못하게
+    platform(0, y, zEnd - (GATE_DEPTH - 1 - GATE_LANE) / 2, inner * 2, GATE_DEPTH - 1 - GATE_LANE, 0x9aa0b5);
+
+    // 힌트는 한 줄(문자열) 또는 여러 줄(배열). 안내판 아래 끝을 문 이름표 바로 위에 맞춘다.
+    const lines = [question, ...[].concat(hint)];
+    sign(question, 0, y + DOOR_H + 0.95 + ((9 / 4) * lines.length) / 2, z + 0.03, { width: 9, color, lines });
+
+    const curtainColors = [0xff5d8f, 0xffd166, 0x4cc9f0];
+    const lanes = doorX.map((x, i) => {
+      const curtain = new THREE.Mesh(
+        new THREE.PlaneGeometry(DOOR, DOOR_H),
+        new THREE.MeshStandardMaterial({ color: curtainColors[i], roughness: 0.9, side: THREE.DoubleSide }),
+      );
+      curtain.position.set(x, y + DOOR_H / 2, z + 0.02);
+      root.add(curtain);
+      const floor = platform(x, y, zl, DOOR, GATE_LANE, 0x9aa0b5);
+      // 틀린 문 통로 끝을 막는 벽 (떨어지는 중에 나오는 발판으로 건너가지 못하게)
+      const back = block(x, y + H, zEnd + 0.2, DOOR, H + 6, 0.4, wallColor);
+      // 문 위 이름표: 보기 3개를 문마다 만들어 두고 배치에 맞는 것만 보인다
+      const labels = options.map((o) => sign(o.text, x, y + DOOR_H + 0.55, z + 0.03, { width: 3.4, color: '#2b2d42' }));
+      return { x, floor, back, labels };
+    });
+
+    const gate = { z, y, lanes, options, right, wrong, order: [0, 1, 2], answered: false };
+    gates.push(gate);
+    return gate;
+  }
+
+  return { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, choiceGate };
+}
+
+export const GATE_DEPTH = 7;
+const GATE_LANE = 4;
+
+// 시드로 예측 문의 정답 위치를 섞는다
+export function shuffleGates(level, seed) {
+  level.gates.forEach((gate, gi) => {
+    const rand = mulberry32((seed ^ (gi + 1) * 0x9e3779b9) >>> 0);
+    const order = [0, 1, 2];
+    for (let i = 2; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    gate.order = order; // order[문 번호] = 보기 번호
+    gate.answered = false;
+    gate.lanes.forEach((lane, li) => {
+      const ok = gate.options[order[li]].correct;
+      lane.floor.visible = ok;
+      lane.floor.userData.collider.enabled = ok;
+      lane.back.visible = !ok;
+      lane.back.userData.collider.enabled = !ok;
+      lane.labels.forEach((m, oi) => (m.visible = oi === order[li]));
+    });
+  });
+}
+
+// 문을 지나 통로로 들어서면 한 번 안내한다. 문 앞으로 돌아오면(다시 시도) 초기화.
+function checkGates(level, player) {
+  for (const gate of level.gates) {
+    const p = player.pos;
+    if (p.z > gate.z) {
+      gate.answered = false;
+      continue;
+    }
+    if (gate.answered || p.z > gate.z - 1.2 || p.z < gate.z - 1 - GATE_LANE || Math.abs(p.x) > 7) continue;
+    gate.answered = true;
+    const li = gate.lanes.reduce((best, l, i) => (Math.abs(l.x - p.x) < Math.abs(gate.lanes[best].x - p.x) ? i : best), 0);
+    const ok = gate.options[gate.order[li]].correct;
+    level.onMessage?.(ok ? gate.right : gate.wrong, ok);
+  }
 }
 
 // 공통 마무리: 매 스텝 갱신, 진행 초기화, 충돌체 동기화
@@ -165,6 +260,7 @@ export function finalizeLevel(level) {
       m.update(t, dt, player);
       if (m.root) m.root.updateMatrixWorld(true);
     }
+    if (player && level.gates.length) checkGates(level, player);
     world.syncDynamic();
   };
   level.resetProgress = () => {
