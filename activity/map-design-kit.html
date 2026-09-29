@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리가 만드는 과학 맵 — 장애물 카드와 설계지</title>
+<style>
+  /* A4 인쇄용. 브라우저에서 열고 인쇄(Ctrl+P) → 배경 그래픽 켜기 */
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    color: #222;
+    background: #eee;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 186mm;
+    min-height: 273mm;
+    margin: 10mm auto;
+    padding: 0;
+    background: #fff;
+    page-break-after: always;
+    break-after: page;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  @media screen { .page { padding: 12mm; width: 210mm; min-height: 297mm; box-shadow: 0 2px 8px rgba(0,0,0,.15); } }
+  @media print { body { background: #fff; } .page { margin: 0; } .noprint { display: none; } }
+
+  h1 { font-size: 20pt; margin: 0 0 2mm; }
+  h2 { font-size: 14pt; margin: 0 0 3mm; }
+  .lead { font-size: 10.5pt; margin: 0 0 5mm; color: #444; }
+  .noprint { max-width: 210mm; margin: 6mm auto 0; font-size: 11pt; background: #fff4d6; padding: 3mm 5mm; border-radius: 3mm; }
+
+  /* ─── 카드 ─── */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .card {
+    border: 0.6mm solid var(--c);
+    border-radius: 3mm;
+    overflow: hidden;
+    height: 55mm;
+    display: flex;
+    flex-direction: column;
+    break-inside: avoid;
+  }
+  .card .top { background: var(--c); color: #fff; padding: 2mm 3.5mm; display: flex; justify-content: space-between; align-items: baseline; }
+  .card .top b { font-size: 13pt; }
+  .card .top span { font-size: 8.5pt; opacity: .9; }
+  .card .body { padding: 2mm 3.5mm; font-size: 8.8pt; line-height: 1.4; flex: 1; }
+  .card .body p { margin: 0 0 1.5mm; }
+  .card .label { display: inline-block; font-weight: 700; color: var(--c); min-width: 17mm; }
+  .card .ex { background: #f6f6f8; border-radius: 2mm; padding: 1.5mm 2.5mm; margin-top: 1mm; }
+  .know { --c: #6a4c93; }
+  .coop { --c: #118ab2; }
+  .force { --c: #e07a5f; }
+  .rest { --c: #6c757d; }
+  .legend { display: flex; gap: 4mm; font-size: 9pt; margin: 0 0 4mm; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 3.5mm; height: 3.5mm; border-radius: 1mm; background: var(--c); vertical-align: -0.5mm; margin-right: 1mm; }
+
+  /* ─── 설계지 ─── */
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 6mm; font-size: 10pt; margin-bottom: 4mm; }
+  .fields div { border-bottom: 0.3mm solid #999; padding: 2mm 0; }
+  .section-box {
+    border: 0.4mm solid #888;
+    border-radius: 2.5mm;
+    padding: 2.5mm 3.5mm;
+    margin-bottom: 3mm;
+    font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .section-box .head { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 1.5mm; }
+  .section-box .num { background: #222; color: #fff; border-radius: 50%; width: 6mm; height: 6mm; display: inline-flex; align-items: center; justify-content: center; margin-right: 2mm; font-size: 9pt; }
+  .row { display: flex; gap: 2mm; align-items: flex-end; margin: 1.6mm 0; }
+  .row .k { white-space: nowrap; font-weight: 600; width: 34mm; }
+  .row .line { flex: 1; border-bottom: 0.3mm dotted #777; height: 5.5mm; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2mm; margin: 1.6mm 0; }
+  .opts div { border: 0.3mm dashed #999; border-radius: 1.5mm; height: 9mm; padding: 1mm 2mm; font-size: 8pt; color: #777; }
+  .check { font-size: 10pt; line-height: 1.8; }
+  .check li { list-style: none; }
+  .check li::before { content: '☐ '; font-size: 12pt; }
+  .draw { border: 0.4mm solid #888; border-radius: 2.5mm; height: 70mm; position: relative; background-image: linear-gradient(#e3e3e3 0.2mm, transparent 0.2mm), linear-gradient(90deg, #e3e3e3 0.2mm, transparent 0.2mm); background-size: 6mm 6mm; }
+  .draw span { position: absolute; left: 3mm; top: 2mm; font-size: 9pt; background: #fff; padding: 0 1mm; }
+  .review { border: 0.4mm solid #888; border-radius: 2.5mm; padding: 3mm 4mm; font-size: 10pt; }
+  .review .row .k { width: 58mm; }
+  .tip { font-size: 9pt; color: #555; margin: 1mm 0 3mm; }
+</style>
+</head>
+<body>
+
+<p class="noprint">인쇄 방법: <b>Ctrl+P</b> → 용지 A4 → <b>배경 그래픽</b> 켜기(색이 나오게). 1~2쪽은 장애물 카드(모둠마다 한 장씩 잘라 쓰기), 3~4쪽은 설계지(모둠마다 한 부), 5쪽은 서로 검토지입니다.</p>
+
+<!-- ─────────── 1쪽: 장애물 카드 ─────────── -->
+<section class="page">
+  <h1>우리가 만드는 과학 맵 — 장애물 카드</h1>
+  <p class="lead">게임에 이미 있는 부품입니다. 카드를 골라 순서대로 놓아 코스를 설계해요. <b>원리를 알아야 지나갈 수 있는 장애물</b>이 좋은 장애물이에요.</p>
+  <div class="legend">
+    <span class="know"><i></i>알아야 지나가요</span>
+    <span class="coop"><i></i>함께 해야 지나가요</span>
+    <span class="force"><i></i>몸으로 느껴요</span>
+    <span class="rest"><i></i>쉬어 가는 구간·도전</span>
+  </div>
+  <div class="cards">
+    <div class="card know">
+      <div class="top"><b>예측 문</b><span>커튼 문 3개</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>벽에 질문이 있고 커튼 문이 3개. 맞는 답의 문 뒤에만 바닥이 있어요. 틀리면 떨어져서 다시 골라요.</p>
+        <p><span class="label">정할 것</span>질문 1개, 보기 3개(정답 1개), 맞혔을 때 설명, 틀렸을 때 힌트</p>
+        <div class="ex">예) 달에서 점프하면? → <b>지구보다 높이</b> / 비슷하게 / 낮게</div>
+      </div>
+    </div>
+    <div class="card know">
+      <div class="top"><b>색 발판</b><span>발판 5줄</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>두 가지 색 발판이 섞여 있어요. 규칙에 맞는 색만 버티고, 틀린 색은 밟는 순간 녹아요.</p>
+        <p><span class="label">정할 것</span>두 색, 규칙 문장(어떤 색이 버티나), 틀렸을 때 힌트</p>
+        <div class="ex">예) 식초에 넣은 리트머스 종이와 같은 색 발판만 버텨요 → <b>빨강</b></div>
+      </div>
+    </div>
+    <div class="card coop">
+      <div class="top"><b>직렬 스위치 문</b><span>스위치 2~3개</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>스위치 발판이 한 줄로 이어져 있어요. <b>모두</b> 밟아야 문이 열려요 → 친구와 나눠 서야 해요.</p>
+        <p><span class="label">정할 것</span>스위치 수, 무엇을 잇는 회로인지, 문을 지날 때 알려 줄 원리</p>
+        <div class="ex">예) 스위치 하나라도 끊기면 전구가 꺼져요</div>
+      </div>
+    </div>
+    <div class="card coop">
+      <div class="top"><b>병렬 스위치 문</b><span>스위치 2~3개</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>스위치가 갈래로 따로 이어져 있어요. <b>하나만</b> 밟아도 문이 열려요.</p>
+        <p><span class="label">정할 것</span>스위치 수, 무엇을 잇는 회로인지, 문을 지날 때 알려 줄 원리</p>
+        <div class="ex">예) 갈래 하나만 이어져도 전구가 켜져요</div>
+      </div>
+    </div>
+    <div class="card force">
+      <div class="top"><b>중력 구역</b><span>점프가 달라져요</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>이 구역에서는 점프 높이와 거리가 달라져요. 약한 중력이면 멀리, 센 중력이면 낮게 뛰어요.</p>
+        <p><span class="label">정할 것</span>어디의 중력인지, 실제 값, 게임 값(조작을 위해 조정할 수 있어요)</p>
+        <div class="ex">예) 달: 실제 약 1/6 → 게임 약 1/3, 16m 점프</div>
+      </div>
+    </div>
+    <div class="card force">
+      <div class="top"><b>바람 구역</b><span>밀어내는 힘</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>주기적으로 바람이 불어 옆으로 밀려요. 바위 뒤에 숨거나 멈출 때를 기다려요.</p>
+        <p><span class="label">정할 것</span>바람이 부는 방향, 부는 시간과 멈추는 시간, 피할 곳</p>
+        <div class="ex">예) 화성 모래 폭풍: 4초마다 불었다 멈춰요</div>
+      </div>
+    </div>
+    <div class="card rest">
+      <div class="top"><b>점프 구간</b><span>틈·계단·움직이는 발판</span></div>
+      <div class="body">
+        <p><span class="label">어떻게</span>조작을 즐기는 쉬어 가는 구간. 과학 원리가 없어도 돼요. <b>설계 전체에서 1~2개만</b>.</p>
+        <p><span class="label">정할 것</span>틈 길이(보통 점프는 약 5m까지), 높이, 움직임</p>
+        <div class="ex">예) 도는 유리 막대를 뛰어넘어요</div>
+      </div>
+    </div>
+    <div class="card rest">
+      <div class="top"><b>도전 별 · 안내판</b><span>선택</span></div>
+      <div class="body">
+        <p><span class="label">도전 별</span>길 옆 섬 위의 별. 점프 + 다이브로만 닿아요. 잘하는 친구를 위한 개인 도전.</p>
+        <p><span class="label">안내판</span>원리를 설명하는 글. <b>예측한 다음에</b> 보이도록 문 뒤에 두면 좋아요.</p>
+        <div class="ex">예) 문 뒤 안내판: "실제 중력: 지구의 약 1/6"</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 2쪽: 좋은 장애물 기준 ─────────── -->
+<section class="page">
+  <h1>좋은 장애물은 무엇일까?</h1>
+  <p class="lead">설계하기 전에 같이 읽어요. 우리가 해 본 네 맵(점프 연구소, 태양계, 산과 염기, 전기 회로)은 이 기준으로 만들었어요.</p>
+  <div class="section-box">
+    <div class="head"><span><span class="num">1</span>원리를 알아야 지나갈 수 있어요</span></div>
+    <p>퀴즈를 맞히고 지나가는 게 아니라, <b>원리가 곧 길을 고르는 방법</b>이 되게 해요. 조작을 잘해도 원리를 모르면 못 지나가야 해요.</p>
+    <p class="tip">좋은 예: 산성 용액에서 리트머스 종이 색을 알아야 버티는 발판을 고를 수 있어요.<br>아쉬운 예: 점프만 잘하면 지나가는 구간 앞에 퀴즈 안내판을 붙여 둔 것.</p>
+  </div>
+  <div class="section-box">
+    <div class="head"><span><span class="num">2</span>과학 내용이 정확해요</span></div>
+    <p>재미를 위해 값을 바꿨다면 <b>실제 값과 게임 값을 함께</b> 적어요. 교과서나 실험 결과로 확인해요.</p>
+    <p class="tip">예: 달의 실제 중력은 지구의 약 1/6이지만, 조작하기 쉽게 게임에서는 약 1/3로 했어요.</p>
+  </div>
+  <div class="section-box">
+    <div class="head"><span><span class="num">3</span>틀려도 배울 수 있어요</span></div>
+    <p>떨어졌을 때 뜨는 힌트가 <b>정답을 말하지 않고 생각할 거리</b>를 줘요.</p>
+    <p class="tip">예: "다시! 달은 지구보다 훨씬 작아요. 작은 천체는 끌어당기는 힘이 어떨까?"</p>
+  </div>
+  <div class="section-box">
+    <div class="head"><span><span class="num">4</span>찍어서 지나가기 어려워요</span></div>
+    <p>보기 3개 중 아무거나 골라도 1/3은 통과해요. 헷갈리기 쉬운 보기(많이 하는 오개념)를 넣으면 더 생각하게 돼요.</p>
+    <p class="tip">예: "토성은 크니까 중력도 셀 거야" → 사실은 지구와 비슷해요 (물에 뜰 만큼 가벼워서).</p>
+  </div>
+  <div class="section-box">
+    <div class="head"><span><span class="num">5</span>함께하면 더 좋아요</span></div>
+    <p>친구와 역할을 나눠야 하는 장애물(직렬 스위치 문)이 있으면 반 전체가 함께 완주할 수 있어요. 잡기·밀치기처럼 방해하는 장애물은 만들지 않아요.</p>
+  </div>
+  <div class="section-box">
+    <div class="head"><span><span class="num">6</span>모두 완주할 수 있어요</span></div>
+    <p>한 판은 2~4분이 알맞아요. 알아야 하는 장애물 2~3개 + 쉬어 가는 구간 1~2개 정도.</p>
+  </div>
+</section>
+
+<!-- ─────────── 3쪽: 설계지 1 ─────────── -->
+<section class="page">
+  <h1>우리 모둠 과학 맵 설계지</h1>
+  <div class="fields">
+    <div>모둠 이름:</div>
+    <div>모둠원:</div>
+    <div>맵 이름:</div>
+    <div>과학 주제(단원):</div>
+  </div>
+  <p class="tip">구간을 순서대로 적어요. 카드 이름을 쓰고, 그 장애물이 어떤 원리를 쓰는지 적어요. 예측 문이면 질문과 보기도 적어요.</p>
+
+  <div class="section-box">
+    <div class="head"><span><span class="num">1</span>구간 1</span><span>카드: ______________________</span></div>
+    <div class="row"><span class="k">쓰는 과학 원리</span><span class="line"></span></div>
+    <div class="row"><span class="k">모르면 왜 못 지나가나</span><span class="line"></span></div>
+    <div class="row"><span class="k">질문·규칙 문장</span><span class="line"></span></div>
+    <div class="opts"><div>정답</div><div>헷갈리는 보기</div><div>헷갈리는 보기</div></div>
+    <div class="row"><span class="k">맞혔을 때 설명</span><span class="line"></span></div>
+    <div class="row"><span class="k">틀렸을 때 힌트</span><span class="line"></span></div>
+  </div>
+
+  <div class="section-box">
+    <div class="head"><span><span class="num">2</span>구간 2</span><span>카드: ______________________</span></div>
+    <div class="row"><span class="k">쓰는 과학 원리</span><span class="line"></span></div>
+    <div class="row"><span class="k">모르면 왜 못 지나가나</span><span class="line"></span></div>
+    <div class="row"><span class="k">질문·규칙 문장</span><span class="line"></span></div>
+    <div class="opts"><div>정답</div><div>헷갈리는 보기</div><div>헷갈리는 보기</div></div>
+    <div class="row"><span class="k">맞혔을 때 설명</span><span class="line"></span></div>
+    <div class="row"><span class="k">틀렸을 때 힌트</span><span class="line"></span></div>
+  </div>
+
+  <div class="section-box">
+    <div class="head"><span><span class="num">3</span>구간 3</span><span>카드: ______________________</span></div>
+    <div class="row"><span class="k">쓰는 과학 원리</span><span class="line"></span></div>
+    <div class="row"><span class="k">모르면 왜 못 지나가나</span><span class="line"></span></div>
+    <div class="row"><span class="k">질문·규칙 문장</span><span class="line"></span></div>
+    <div class="opts"><div>정답</div><div>헷갈리는 보기</div><div>헷갈리는 보기</div></div>
+    <div class="row"><span class="k">맞혔을 때 설명</span><span class="line"></span></div>
+    <div class="row"><span class="k">틀렸을 때 힌트</span><span class="line"></span></div>
+  </div>
+</section>
+
+<!-- ─────────── 4쪽: 설계지 2 ─────────── -->
+<section class="page">
+  <div class="section-box">
+    <div class="head"><span><span class="num">4</span>구간 4 (선택)</span><span>카드: ______________________</span></div>
+    <div class="row"><span class="k">쓰는 과학 원리</span><span class="line"></span></div>
+    <div class="row"><span class="k">모르면 왜 못 지나가나</span><span class="line"></span></div>
+    <div class="row"><span class="k">질문·규칙 문장</span><span class="line"></span></div>
+    <div class="opts"><div>정답</div><div>헷갈리는 보기</div><div>헷갈리는 보기</div></div>
+    <div class="row"><span class="k">맞혔을 때 설명</span><span class="line"></span></div>
+    <div class="row"><span class="k">틀렸을 때 힌트</span><span class="line"></span></div>
+  </div>
+
+  <div class="draw"><span>코스 그림: 출발에서 골인까지 위에서 본 모습을 그려요 (구간 번호, 스위치·별 위치)</span></div>
+
+  <h2 style="margin-top:5mm">우리 모둠 점검</h2>
+  <ul class="check">
+    <li>과학 내용을 교과서나 실험 결과로 확인했어요.</li>
+    <li>원리를 모르면 정말 못 지나가요. (조작만 잘해서는 안 돼요)</li>
+    <li>헷갈리는 보기를 넣어서 찍어서 지나가기 어려워요.</li>
+    <li>틀렸을 때 힌트가 정답을 말하지 않고 생각할 거리를 줘요.</li>
+    <li>게임을 위해 바꾼 값이 있으면 실제 값도 적었어요.</li>
+    <li>친구를 방해하는 장애물은 없어요.</li>
+    <li>한 판 2~4분, 모두 완주할 수 있어요.</li>
+  </ul>
+</section>
+
+<!-- ─────────── 5쪽: 서로 검토지 ─────────── -->
+<section class="page">
+  <h1>서로 검토지</h1>
+  <p class="lead">다른 모둠의 설계지를 읽거나, 만든 맵을 해 본 뒤 적어요. 좋은 점을 먼저 적어요.</p>
+  <div class="review">
+    <div class="fields" style="margin-bottom:2mm"><div>검토한 모둠(맵 이름):</div><div>검토한 사람:</div></div>
+    <div class="row"><span class="k">가장 좋았던 장애물과 까닭</span><span class="line"></span></div>
+    <div class="row"><span class="k"></span><span class="line"></span></div>
+    <div class="row"><span class="k">원리를 몰라도 지나간 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">헷갈렸거나 어려웠던 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">과학 내용이 맞는지 궁금한 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">이렇게 바꾸면 더 좋겠어요</span><span class="line"></span></div>
+    <div class="row"><span class="k"></span><span class="line"></span></div>
+  </div>
+  <div class="review" style="margin-top:6mm">
+    <div class="fields" style="margin-bottom:2mm"><div>검토한 모둠(맵 이름):</div><div>검토한 사람:</div></div>
+    <div class="row"><span class="k">가장 좋았던 장애물과 까닭</span><span class="line"></span></div>
+    <div class="row"><span class="k"></span><span class="line"></span></div>
+    <div class="row"><span class="k">원리를 몰라도 지나간 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">헷갈렸거나 어려웠던 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">과학 내용이 맞는지 궁금한 곳</span><span class="line"></span></div>
+    <div class="row"><span class="k">이렇게 바꾸면 더 좋겠어요</span><span class="line"></span></div>
+    <div class="row"><span class="k"></span><span class="line"></span></div>
+  </div>
+</section>
+
+</body>
+</html>

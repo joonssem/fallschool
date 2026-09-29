@@ -55,7 +55,7 @@ python -m http.server 8000 --bind 0.0.0.0
 ```
 fallschool/rooms/{방번호}
   meta              [저빈도] 교사만 씀: phase(LOBBY|RACE|RESULT), race, seed, startAt, frozen, epoch
-  players/{uid}     [중빈도] 학생 자기 것만: name, color, race, cp, falls, finish(ms)
+  players/{uid}     [중빈도] 학생 자기 것만: name, color, race, cp, falls, finish(ms), stars(도전 별), gates(예측 문 첫 시도 "ox-o")
   pos/{uid}         [고빈도] "x,y,z,방향,상태" 문자열, 초당 최대 10회, 거의 안 움직이면 생략
   presence/{uid}    접속 표시, 연결이 끊기면 서버가 자동 삭제(onDisconnect)
   tiles/{race}/{i}  숨은 발판이 무너진 시각

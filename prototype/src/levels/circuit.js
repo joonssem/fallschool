@@ -173,6 +173,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -90,
     y: Y,
+    name: '더 밝게',
     question: '전구 두 개를 더 밝게 켜려면?',
     hint: '전지 한 개에 전구 두 개를 연결해요',
     options: [{ text: '병렬로 연결', correct: true }, { text: '직렬로 연결' }, { text: '어떻게 해도 같아요' }],
@@ -185,6 +186,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -103,
     y: Y,
+    name: '하나를 빼도',
     question: '하나를 빼도 켜져 있는 연결은?',
     hint: '전구 두 개 중 하나를 빼면?',
     options: [{ text: '병렬 연결', correct: true }, { text: '직렬 연결' }, { text: '둘 다 꺼져요' }],

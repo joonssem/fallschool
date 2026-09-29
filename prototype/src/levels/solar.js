@@ -90,6 +90,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -47,
     y: 8,
+    name: '달',
     question: '달에서 점프하면 어떻게 될까?',
     hint: '힌트: 달은 지구보다 훨씬 작아요',
     options: [{ text: '지구보다 높이', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 낮게' }],
@@ -116,6 +117,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -118,
     y: 10,
+    name: '화성',
     question: '화성의 중력은 지구와 비교하면?',
     hint: '힌트: 화성은 지구의 절반쯤 되는 크기예요',
     options: [{ text: '지구보다 약해요', correct: true }, { text: '지구와 같아요' }, { text: '지구보다 세요' }],
@@ -210,6 +212,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -206,
     y: 9,
+    name: '목성',
     question: '목성에서 점프하면 어떻게 될까?',
     hint: '힌트: 목성은 태양계에서 가장 큰 행성이에요',
     options: [{ text: '지구보다 낮게', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 높이' }],
@@ -252,6 +255,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -255,
     y: 11,
+    name: '토성',
     question: '토성의 중력은 어느 정도일까?',
     hint: '힌트: 토성은 크지만 물에 뜰 만큼 가벼워요',
     options: [{ text: '지구와 비슷해요', correct: true }, { text: '목성만큼 세요' }, { text: '달처럼 약해요' }],

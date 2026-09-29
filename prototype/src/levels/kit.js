@@ -163,7 +163,8 @@ export function makeKit(level) {
   // 나오는 발판은 폭 전체라서 옆 문이 정답이어도 가운데 길로 이어진다.
   // 조작 실력으로 돌아갈 수 없게 벽을 높고 넓게, 통로 위는 지붕으로 막는다 (달 중력 점프로도 못 넘는다).
   // 어느 문이 정답인지는 경기 시드로 섞는다 (같은 방이면 모두 같은 배치).
-  function choiceGate({ z, y, question, hint, options, right, wrong, color = '#6a4c93' }) {
+  // name: 교사 화면 요약에 쓰는 짧은 이름 (예: '달')
+  function choiceGate({ z, y, name, question, hint, options, right, wrong, color = '#6a4c93' }) {
     const DOOR = 3;
     const DOOR_H = 2.4; // 캐릭터 키 1.7. 낮을수록 문 위 질문이 눈높이에 가깝다
     const PILLAR = 1.2;
@@ -205,7 +206,7 @@ export function makeKit(level) {
       return { x, floor, back, labels };
     });
 
-    const gate = { z, y, lanes, options, right, wrong, order: [0, 1, 2], answered: false };
+    const gate = { z, y, name: name || `문 ${gates.length + 1}`, lanes, options, right, wrong, order: [0, 1, 2], answered: false };
     gates.push(gate);
     return gate;
   }
@@ -253,18 +254,19 @@ export function shuffleGates(level, seed) {
 
 // 문을 지나 통로로 들어서면 한 번 안내한다. 문 앞으로 돌아오면(다시 시도) 초기화.
 function checkGates(level, player) {
-  for (const gate of level.gates) {
+  level.gates.forEach((gate, gi) => {
     const p = player.pos;
     if (p.z > gate.z) {
       gate.answered = false;
-      continue;
+      return;
     }
-    if (gate.answered || p.z > gate.z - 1.2 || p.z < gate.z - 1 - GATE_LANE || Math.abs(p.x) > 7) continue;
+    if (gate.answered || p.z > gate.z - 1.2 || p.z < gate.z - 1 - GATE_LANE || Math.abs(p.x) > 7) return;
     gate.answered = true;
     const li = gate.lanes.reduce((best, l, i) => (Math.abs(l.x - p.x) < Math.abs(gate.lanes[best].x - p.x) ? i : best), 0);
     const ok = gate.options[gate.order[li]].correct;
     level.onMessage?.(ok ? gate.right : gate.wrong, ok);
-  }
+    level.onGateResult?.(gi, ok);
+  });
 }
 
 // 공통 마무리: 매 스텝 갱신, 진행 초기화, 충돌체 동기화

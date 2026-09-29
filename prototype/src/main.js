@@ -96,6 +96,13 @@ function loadMap(id, seed = Date.now() >>> 0) {
   level.onStar = (n, total) => {
     toast(`도전 별 ${n} / ${total}!`);
     sfx.play('checkpoint');
+    publishLearning();
+  };
+  // 예측 문 첫 시도 결과 (경기마다 문 하나당 한 번만 기록)
+  level.onGateResult = (gi, ok) => {
+    if (game.gateFirst[gi]) return;
+    game.gateFirst[gi] = ok ? 'o' : 'x';
+    publishLearning();
   };
   // 협동 장치(스위치 발판)용: 다른 학생의 마지막 받은 위치와 방 안 학생 수. 화면마다 같은 값으로 계산한다.
   level.getOthers = () => Array.from(crowd.avatars.values(), (a) => a.target);
@@ -140,6 +147,7 @@ const game = {
   race: null,
   finishMs: 0,
   stuckCp: -1, // 도움 점프: 같은 체크포인트에서 떨어진 횟수
+  gateFirst: [], // 예측 문 첫 시도: 'o' 맞힘, 'x' 틀림
   stuckFalls: 0,
 };
 
@@ -192,9 +200,19 @@ function resetRun() {
   game.timerStarted = false;
   game.stuckCp = -1;
   game.stuckFalls = 0;
+  game.gateFirst = [];
   player.jumpBoost = 1;
   $('overlay-finish').classList.add('hidden');
   respawnAtCheckpoint(false);
+}
+
+// 교사 화면용 학습 기록: 도전 별 수, 예측 문 첫 시도 결과("ox-o").
+// 기존 진행 기록과 따로 보낸다: 새 데이터베이스 규칙을 게시하기 전에는 이 쓰기만 거부되고 완주 기록 등은 그대로 저장된다.
+function publishLearning(reset = false) {
+  if (net.mode !== 'student' || phase() !== 'racing') return;
+  const stars = reset ? 0 : level.stars.filter((s) => s.got).length;
+  const gates = reset ? '' : level.gates.map((_, i) => game.gateFirst[i] || '-').join('');
+  net.room.publishProgress({ stars, gates }).catch(() => {});
 }
 
 function onCheckpoint(cp) {
@@ -258,6 +276,7 @@ function onStudentMeta(m) {
     level.setSeed(m.seed);
     resetRun();
     net.room.publishProgress({ race: m.race, cp: 0, falls: 0, finish: 0 });
+    net.room.publishProgress({ stars: 0, gates: '' }).catch(() => {});
   } else if (m.phase === 'LOBBY' && (net.lastPhase !== 'LOBBY' || level.seed !== m.seed || switched)) {
     game.race = null;
     level.setSeed(m.seed);
@@ -512,13 +531,33 @@ function renderTeacherList() {
   const race = room.meta?.race;
   const rows = room.students().map((s) => {
     const inRace = racing && s.race === race;
-    return { ...s, done: inRace && s.finish > 0 ? s.finish : 0, cp: inRace ? s.cp : 0, falls: inRace ? s.falls : 0 };
+    return {
+      ...s,
+      done: inRace && s.finish > 0 ? s.finish : 0,
+      cp: inRace ? s.cp : 0,
+      falls: inRace ? s.falls : 0,
+      stars: inRace ? s.stars || 0 : 0,
+      gates: inRace && typeof s.gates === 'string' ? s.gates : '',
+    };
   });
   // 완주 기록 순 → 진행한 거리 순 (서열 강조 없이 교사만 보는 목록)
   rows.sort((a, b) => (a.done && b.done ? a.done - b.done : a.done ? -1 : b.done ? 1 : (a.pos?.z ?? 0) - (b.pos?.z ?? 0)));
   const finished = rows.filter((r) => r.done).length;
   $('tp-count').textContent = `접속 ${rows.length}명`;
   $('tp-finished').textContent = racing ? `완주 ${finished} / ${rows.length}` : '';
+  // 예측 문마다 첫 시도에 맞힌 학생 수 / 그 문까지 온 학생 수 (경기 뒤 되돌아보기 발문 자료)
+  const gateText = racing
+    ? level.gates
+        .map((g, i) => {
+          const tried = rows.filter((r) => r.gates[i] === 'o' || r.gates[i] === 'x');
+          const right = tried.filter((r) => r.gates[i] === 'o').length;
+          return tried.length ? `${g.name} ${right}/${tried.length}` : null;
+        })
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+  $('tp-gates').textContent = gateText ? `예측 문 첫 시도 정답: ${gateText}` : '';
+  $('tp-gates').classList.toggle('hidden', !gateText);
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   $('tp-list').innerHTML = rows
     .map((r) => {
@@ -526,7 +565,7 @@ function renderTeacherList() {
       const right = r.done ? `<span class="done">${formatTime(r.done / 1000)}</span>` : `<span class="where">떨어짐 ${r.falls}</span>`;
       return `<li data-uid="${esc(r.uid)}" class="${net.followUid === r.uid ? 'follow' : ''}">
         <span class="dot" style="background:${esc(r.color)}"></span>
-        <span><span class="name">${esc(r.name)}</span><br><span class="where">${where}</span></span>${right}</li>`;
+        <span><span class="name">${esc(r.name)}</span><br><span class="where">${where}${r.stars ? ` · ★${esc(r.stars)}` : ''}</span></span>${right}</li>`;
     })
     .join('');
   return rows;

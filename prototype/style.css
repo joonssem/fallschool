@@ -369,6 +369,7 @@ body.teacher #banner { left: calc(50% - 170px); }
 .tp-btn.freeze.on { background: #118ab2; }
 .tp-btn:disabled { opacity: 0.4; }
 .tp-summary { display: flex; justify-content: space-between; font-weight: 800; }
+.tp-gates { padding: 6px 10px; border-radius: 10px; background: #e7f5ff; color: #1c4f82; font-size: 12px; font-weight: 700; line-height: 1.4; }
 .tp-hint { font-size: 12px; opacity: 0.6; }
 .tp-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
 .tp-list li {

@@ -63,6 +63,8 @@
               "cp": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" },
               "falls": { ".validate": "newData.isNumber() && newData.val() >= 0" },
               "finish": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+              "stars": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" },
+              "gates": { ".validate": "newData.isString() && newData.val().matches(/^[ox-]{0,8}$/)" },
               "$other": { ".validate": false }
             }
           },

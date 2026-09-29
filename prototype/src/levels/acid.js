@@ -81,6 +81,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -31,
     y: Y,
+    name: '페놀프탈레인',
     question: '붉게 변한 이 용액은 무엇일까?',
     hint: '페놀프탈레인 용액을 넣었어요',
     options: [{ text: '비눗물', correct: true }, { text: '식초' }, { text: '레몬즙' }],
@@ -188,6 +189,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -86,
     y: Y,
+    name: '붉은 양배추',
     question: '노랗게 변한 이 용액의 성질은?',
     hint: '붉은 양배추 지시약을 넣었어요',
     options: [{ text: '염기성', correct: true }, { text: '산성' }, { text: '알 수 없어요' }],
@@ -219,6 +221,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   choiceGate({
     z: -119,
     y: Y,
+    name: '섞으면?',
     question: '묽은 염산에 염기성 용액을 계속 넣으면?',
     hint: '묽은 수산화 나트륨 용액을 조금씩 넣어요',
     options: [{ text: '산성이 약해져요', correct: true }, { text: '산성이 강해져요' }, { text: '변하지 않아요' }],
