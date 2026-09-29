@@ -616,7 +616,10 @@ function updateHud(dt) {
     $('room-status').textContent = `${room.code}번 방 · ${total}명`;
     const text =
       p === 'lobby'
-        ? '자유 연습 중 · 선생님이 출발 신호를 주면 시작해요'
+        ? // 대기실 안내는 5초마다 번갈아 보여 준다
+          Math.floor(performance.now() / 5000) % 2
+          ? '잡기·밀치기는 없어요 · 우리 반 모두 완주가 목표!'
+          : '자유 연습 중 · 선생님이 출발 신호를 주면 시작해요'
         : p === 'racing' || p === 'result'
           ? `우리 반 완주 ${done} / ${total}명`
           : '';

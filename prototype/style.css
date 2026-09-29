@@ -206,7 +206,11 @@ button.small {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 .panel h1 { margin: 0 0 4px; font-size: 34px; }
-.panel .sub { margin: 0 0 18px; opacity: 0.7; }
+.panel .sub { margin: 0 0 12px; opacity: 0.7; }
+/* 활동 시작 안내 (원작처럼 잡기·밀치기를 기대하는 학생이 있어서) */
+.promise { display: flex; flex-direction: column; gap: 2px; margin: 0 0 16px; padding: 10px 14px; border-radius: 14px; background: #fff4d6; color: #5c4400; font-size: 14px; text-align: left; }
+.promise b { font-size: 15px; }
+.promise span::before { content: '· '; }
 .controls { text-align: left; line-height: 1.9; font-size: 17px; margin-bottom: 16px; }
 .controls .keys { font-size: 13px; opacity: 0.6; line-height: 1.5; margin-top: 6px; }
 .colors { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; font-weight: 700; }
@@ -350,6 +354,7 @@ body.teacher #banner { left: calc(50% - 170px); }
 .tp-qr svg { width: 100%; height: 100%; }
 .tp-url { font-size: 12px; word-break: break-all; opacity: 0.7; -webkit-user-select: text; user-select: text; }
 .tp-phase { padding: 8px 12px; border-radius: 12px; background: #f1f0fa; font-weight: 800; text-align: center; }
+.tp-promise { padding: 6px 10px; border-radius: 10px; background: #fff4d6; color: #5c4400; font-size: 12px; line-height: 1.4; }
 .tp-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tp-btn {
   padding: 12px 8px;
