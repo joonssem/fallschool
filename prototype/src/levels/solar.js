@@ -15,7 +15,7 @@ const ZONES = [
   { name: '화성', zMax: -110, g: 0.45 },
   { name: '소행성대', zMax: -163, g: 0.5 },
   { name: '목성', zMax: -206, g: 1.6 },
-  { name: '토성', zMax: -247, g: 0.9 },
+  { name: '토성', zMax: -247, g: 1.07 }, // 실제 값 그대로 (예전 0.9는 지구보다 약해 실제와 방향이 반대였다)
   { name: '우주 정거장', zMax: -290, g: 1 },
 ];
 
@@ -67,7 +67,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // ─── 지구 발사대 ─────────────────────────────────────
   platform(0, 0, 0, 16, 16, C.earth);
   startCheckpoint('지구 발사대');
-  // 도전 별: 중력마다 닿는 거리가 다르다 — 지구 7m, 달 19.5m, 토성 8m (보통 점프로는 안 되고 점프 + 다이브로 닿는 거리)
+  // 도전 별: 중력마다 닿는 거리가 다르다 — 지구 7m, 달 19.5m, 토성 6.5m (보통 점프로는 안 되고 점프 + 다이브로 닿는 거리)
   challengeStar(16.5, 0, -2);
   info(-1, 0, -4, '지구', '중력의 기준 (×1)', '평소처럼 점프해요', '#2a9d8f');
   // 첫 틈은 보통 점프로 넘는 3m (예전 6m는 점프 + 다이브가 필요해 처음 하는 학생이 막혔다)
@@ -251,7 +251,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // ─── 토성 고리: 다리를 건너며 도는 고리 조각을 넘거나 틈으로 지나기 ──
   const m5 = platform(0, 11, -251, 12, 8, C.checkpoint);
   checkpoint(m5, new THREE.Vector3(0, 11, -251), '토성 앞');
-  challengeStar(15.5, 11, -251);
+  challengeStar(14, 11, -251); // 토성(×1.07): 보통 점프 5m, 점프 + 다이브 7.75m → 6.5m
   choiceGate({
     z: -255,
     y: 11,
@@ -264,7 +264,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     color: '#b08900',
   });
   // 문 뒤(-262)부터: 예전 좌표에서 32만큼 뒤로 민 값
-  info(1, 11, -256, '토성', '실제 중력: 지구의 약 1.07배', '게임 중력: 0.9배', '#b08900');
+  info(1, 11, -256, '토성', '실제 중력: 지구의 약 1.07배', '게임 중력: 1.07배 (실제와 같아요)', '#b08900');
   platform(0, 11, -276, 4, 28, C.station);
   const ring = new THREE.Group();
   ring.position.set(0, 11.6, -274);
