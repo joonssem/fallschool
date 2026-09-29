@@ -2,11 +2,13 @@
 import { buildLevel } from '../level.js';
 import { buildSolar } from './solar.js';
 import { buildAcid } from './acid.js';
+import { buildCircuit } from './circuit.js';
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', build: buildLevel },
   { id: 'solar', name: '태양계 중력 달리기', build: buildSolar },
   { id: 'acid', name: '산과 염기 실험실', build: buildAcid },
+  { id: 'circuit', name: '전기 회로 공장', build: buildCircuit },
 ];
 
 export const mapById = (id) => MAPS.find((m) => m.id === id) || MAPS[0];

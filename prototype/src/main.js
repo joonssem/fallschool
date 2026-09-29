@@ -93,6 +93,9 @@ function loadMap(id, seed = Date.now() >>> 0) {
   level.onFinish = onFinish;
   level.onTileTriggered = (i) => net.room?.triggerTile(i);
   level.onMessage = (text, ok) => toast(text, { seconds: 4.5, tone: ok ? 'ok' : 'retry' });
+  // 협동 장치(스위치 발판)용: 다른 학생의 마지막 받은 위치와 방 안 학생 수. 화면마다 같은 값으로 계산한다.
+  level.getOthers = () => Array.from(crowd.avatars.values(), (a) => a.target);
+  level.getPlayerCount = () => crowd.avatars.size + (net.mode === 'teacher' ? 0 : 1);
   const sky = level.sky;
   scene.background = new THREE.Color(sky.background);
   scene.fog = new THREE.Fog(...sky.fog);
@@ -133,7 +136,7 @@ const game = {
   race: null,
   finishMs: 0,
 };
-const cam = { yaw: 0, pitch: 0.38, dist: 8.5, target: new THREE.Vector3() };
+const cam = { yaw: 0, pitch: 0.38, dist: 8.5, cur: 8.5, target: new THREE.Vector3() };
 
 const currentCheckpoint = () => level.checkpoints[game.cpIndex];
 
@@ -680,6 +683,7 @@ let fpsFrames = 0;
 let fpsTime = 0;
 const _offset = new THREE.Vector3();
 const _want = new THREE.Vector3();
+const _camDir = new THREE.Vector3();
 
 // 방에 있으면 움직이는 장애물 시각을 서버 시계에 맞춘다 (모두 같은 순간에 같은 위치)
 function sharedTime() {
@@ -770,6 +774,11 @@ function frame(now) {
   _offset
     .set(Math.sin(cam.yaw) * Math.cos(cam.pitch), Math.sin(cam.pitch), Math.cos(cam.yaw) * Math.cos(cam.pitch))
     .multiplyScalar(cam.dist);
+  // 벽이 카메라와 캐릭터 사이를 가리면 벽 앞으로 당긴다 (가까워질 때는 바로, 멀어질 때는 천천히)
+  _camDir.copy(_offset).divideScalar(cam.dist);
+  const clear = Math.max(1.5, world.raycast(cam.target, _camDir, cam.dist) - 0.4);
+  cam.cur = clear < cam.cur ? clear : cam.cur + (clear - cam.cur) * (1 - Math.exp(-4 * dt));
+  _offset.copy(_camDir).multiplyScalar(cam.cur);
   camera.position.copy(cam.target).add(_offset);
   camera.lookAt(cam.target);
 

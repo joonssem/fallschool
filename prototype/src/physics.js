@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 
 const _local = new THREE.Vector3();
+const _rayDir = new THREE.Vector3();
+const _toC = new THREE.Vector3();
 const _closest = new THREE.Vector3();
 const _prevPoint = new THREE.Vector3();
 
@@ -90,6 +92,30 @@ export class BoxCollider {
     out.normal.transformDirection(this.matrix);
     return true;
   }
+
+  // 반직선(origin + dir·t, dir 단위 벡터)이 박스에 처음 닿는 t. 안 닿으면 Infinity (카메라가 벽 뒤로 가지 않게)
+  raycast(origin, dir, maxDist) {
+    _local.copy(origin).applyMatrix4(this.inverse);
+    _rayDir.copy(dir).transformDirection(this.inverse);
+    let t0 = 0;
+    let t1 = maxDist;
+    for (const k of ['x', 'y', 'z']) {
+      const o = _local[k];
+      const d = _rayDir[k];
+      const h = this.half[k];
+      if (Math.abs(d) < 1e-9) {
+        if (o < -h || o > h) return Infinity;
+        continue;
+      }
+      let a = (-h - o) / d;
+      let b = (h - o) / d;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+      if (t0 > t1) return Infinity;
+    }
+    return t0;
+  }
 }
 
 export class PhysicsWorld {
@@ -100,6 +126,21 @@ export class PhysicsWorld {
   add(collider) {
     this.colliders.push(collider);
     return collider;
+  }
+
+  // 움직이지 않는 충돌체 중 반직선에 처음 닿는 거리 (없으면 maxDist)
+  raycast(origin, dir, maxDist) {
+    let best = maxDist;
+    for (const c of this.colliders) {
+      if (!c.enabled || c.dynamic) continue;
+      // 경계 구로 먼저 거른다
+      _toC.copy(c.center).sub(origin);
+      const along = THREE.MathUtils.clamp(_toC.dot(dir), 0, best);
+      if (_toC.addScaledVector(dir, -along).lengthSq() > c.radius * c.radius) continue;
+      const t = c.raycast(origin, dir, best);
+      if (t < best) best = t;
+    }
+    return best;
   }
 
   syncDynamic() {
