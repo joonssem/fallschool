@@ -1,0 +1,11 @@
+{
+  "name": "fallschool-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/giantlab.mjs && node tests/body-water.mjs body && node tests/body-water.mjs water && node tests/valve.mjs"
+  },
+  "devDependencies": {
+    "three": "0.170.0"
+  }
+}
