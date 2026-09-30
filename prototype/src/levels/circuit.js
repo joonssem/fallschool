@@ -168,16 +168,17 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
 
   // ─── 예측 문 두 개 ──────────────────────────────────
   const a1 = platform(0, Y, -87, 14, 6, C.checkpoint);
+  sign('확장 도전', -8, Y + 3.4, -88, { width: 5, color: '#118ab2', lines: ['확장 도전', '전구 밝기 비교', '(같은 전구·같은 전지)'], rotY: 0.4 });
   checkpoint(a1, new THREE.Vector3(0, Y, -86), '예측 문 1');
   choiceGate({
     z: -90,
     y: Y,
     name: '더 밝게',
-    question: '전구 두 개를 더 밝게 켜려면?',
-    hint: '전지 한 개에 전구 두 개를 연결해요',
+    question: '[확장 도전] 같은 전구 두 개를 더 밝게 켜려면?',
+    hint: '같은 전지 한 개와 같은 전구 두 개로 비교해요',
     options: [{ text: '병렬로 연결', correct: true }, { text: '직렬로 연결' }, { text: '어떻게 해도 같아요' }],
-    right: '정답! 전구 두 개를 병렬로 연결하면 직렬로 연결할 때보다 밝아요',
-    wrong: '다시! 직렬로 연결한 전구 두 개는 전구 하나일 때보다 어두웠지요',
+    right: '정답! 같은 전지 한 개, 같은 전구 두 개라면 병렬로 연결할 때가 직렬로 연결할 때보다 밝아요',
+    wrong: '다시! 같은 전지에 같은 전구 두 개를 직렬로 연결하면 전구 하나일 때보다 어두워요',
     color: '#118ab2',
   });
   const a2 = platform(0, Y, -100, 14, 6, C.checkpoint);
@@ -186,8 +187,8 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     z: -103,
     y: Y,
     name: '하나를 빼도',
-    question: '하나를 빼도 켜져 있는 연결은?',
-    hint: '전구 두 개 중 하나를 빼면?',
+    question: '[확장 도전] 하나를 빼도 켜져 있는 연결은?',
+    hint: '같은 전구 두 개 중 하나를 빼면?',
     options: [{ text: '병렬 연결', correct: true }, { text: '직렬 연결' }, { text: '둘 다 꺼져요' }],
     right: '정답! 병렬 연결은 갈래가 따로라서 전구 하나를 빼도 다른 전구는 켜져 있어요',
     wrong: '다시! 직렬 연결은 한 줄로 이어져 있어요. 하나를 빼면 회로가 어떻게 될까?',

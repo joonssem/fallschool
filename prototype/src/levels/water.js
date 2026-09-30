@@ -55,28 +55,31 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     const p = platform(x, y, z, 8, 7, i % 2 ? C.seaLight : C.land);
     if (i === ascent.length - 1) checkpoint(p, new THREE.Vector3(x, y, z), '구름에 도착');
   });
-  sign('증발', -8, 5, -18, { width: 4, color: '#e76f51', lines: ['증발', '햇빛을 받은 물이', '수증기가 되어 올라가요'], rotY: 0.4 });
+  sign('증발', -8, 5, -18, { width: 5, color: '#e76f51', lines: ['증발', '물이 눈에 보이지 않는 기체,', '수증기가 되어 올라가요'], rotY: 0.4 });
   sun(18, 14, -21);
+  steamDots();
 
   // 구름 속 응결: 공기가 식으면 수증기가 작은 물방울이 된다.
   const cloudPad = platform(0, Y + 6, -43, 16, 10, C.cloud);
   checkpoint(cloudPad, new THREE.Vector3(0, Y + 6, -40), '응결 구름');
   challengeStar(-12.5, Y + 6, -42);
+  sign('구름', 10, Y + 10, -37, { width: 5.5, color: '#3986a8', lines: ['구름', '수증기가 식어 생긴 작은 물방울과', '얼음 알갱이예요 (수증기는 안 보여요)'], rotY: -0.4 });
   cloudPuffs(-18, 10, -46, 6);
+  cloudDroplets(0, Y + 8.2, -42);
   cloudPuffs(19, 12, -44, 6);
   choiceGate({
     z: -48,
     y: Y + 6,
     name: '응결',
-    question: '수증기가 작은 물방울이 되어 구름을 만들 때?',
+    question: '눈에 보이지 않는 수증기가 식어 작은 물방울이 되는 현상은?',
     hint: '구름 속 공기의 온도가 내려가면 어떻게 될까요?',
     options: [
       { text: '공기가 식으며 응결', correct: true },
       { text: '더 뜨거워져 증발' },
       { text: '바로 얼어 눈이 됨' },
     ],
-    right: '맞아요! 공기가 식으면 수증기가 작은 물방울로 응결해 구름을 만들어요.',
-    wrong: '구름은 수증기가 식어 작은 물방울로 응결하면서 만들어져요.',
+    right: '맞아요! 공기가 식으면 수증기(기체)가 작은 물방울로 응결해요. 구름은 이 작은 물방울이나 얼음 알갱이가 모인 것이에요.',
+    wrong: '수증기는 눈에 보이지 않는 기체예요. 식으면 작은 물방울로 응결하고, 이 물방울이 모여 구름이 돼요.',
     color: '#3986a8',
   });
 
@@ -157,6 +160,41 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   };
   level.setSeed(seed);
   return finalizeLevel(level);
+
+  // 수증기는 눈에 보이지 않는 기체다: 아주 희미한 작은 점으로만 그려 위로 올라가게 한다 (안내판: "점으로 표시")
+  function steamDots() {
+    const dots = [];
+    const geo = new THREE.SphereGeometry(0.14, 6, 4);
+    for (let i = 0; i < 14; i++) {
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22 }));
+      root.add(m);
+      dots.push({ m, x: -9 + (i % 5) * 4.5, z: -8 - Math.floor(i / 5) * 9, phase: i * 0.37 });
+    }
+    movers.push({
+      root: null,
+      update(t) {
+        for (const d of dots) {
+          const k = (t * 0.12 + d.phase) % 1;
+          d.m.position.set(d.x + Math.sin(t + d.phase * 9) * 0.3, 1 + k * 9, d.z - k * 24);
+          d.m.material.opacity = 0.22 * Math.sin(k * Math.PI);
+        }
+      },
+    });
+    sign('수증기', 8, 5, -12, { width: 5, color: '#5a6b7b', lines: ['수증기', '보이지 않는 기체예요', '(희미한 점으로 표시)'], rotY: -0.4 });
+  }
+
+  // 구름 속 작은 물방울: 응결한 물방울을 알갱이로 보여 준다
+  function cloudDroplets(x, y, z) {
+    const geo = new THREE.SphereGeometry(0.22, 8, 6);
+    const drops = [];
+    for (let i = 0; i < 16; i++) {
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: C.rain, roughness: 0.25, transparent: true, opacity: 0.85 }));
+      m.position.set(x + ((i % 4) - 1.5) * 3.2, y + Math.floor(i / 4) * 0.7, z + ((i * 5) % 4) * 1.5 - 3);
+      root.add(m);
+      drops.push(m);
+    }
+    movers.push({ root: null, update(t) { drops.forEach((m, i) => { m.position.y += Math.sin(t * 1.3 + i) * 0.003; }); } });
+  }
 
   function sun(x, y, z) {
     const sphere = new THREE.Mesh(

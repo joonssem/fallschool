@@ -41,25 +41,25 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   sign('인체 대탐험', -8, 4, -1, {
     width: 6,
     color: '#a22c3a',
-    lines: ['인체 대탐험', '산소를 싣고', '근육까지 달려요'],
+    lines: ['인체 대탐험', '산소를 싣고', '온몸으로 달려요'],
     rotY: 0.42,
   });
   challengeStar(14, 0, -3);
   const cp0 = platform(0, Y, -10, 16, 8, C.checkpoint);
-  checkpoint(cp0, new THREE.Vector3(0, Y, -8), '폐포');
+  checkpoint(cp0, new THREE.Vector3(0, Y, -8), '폐');
   choiceGate({
     z: -14,
     y: Y,
-    name: '폐포',
+    name: '폐',
     question: '숨을 들이마신 뒤 산소가 혈액으로 들어가는 곳은?',
-    hint: '폐 안의 아주 작은 공기주머니를 떠올려요.',
+    hint: '숨을 들이마시면 공기가 어디로 들어갈까요?',
     options: [
-      { text: '폐포', correct: true },
+      { text: '폐', correct: true },
       { text: '위' },
       { text: '뼈' },
     ],
-    right: '맞아요! 폐포에서 산소가 혈액으로 이동해요.',
-    wrong: '폐의 작은 공기주머니인 폐포에서 산소가 혈액으로 이동해요.',
+    right: '맞아요! 폐에서 산소가 혈액으로 들어가고, 혈액 속 이산화탄소는 폐로 나와 숨으로 내보내요.',
+    wrong: '숨으로 들어온 공기는 폐로 가요. 폐에서 산소가 혈액으로 들어가고 이산화탄소는 나와요.',
     color: '#a22c3a',
   });
 
@@ -94,22 +94,25 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   ];
   musclePath.forEach(([x, y, z], i) => platform(x, y, z, 9, 8, i === 1 ? C.oxygen : C.vessel));
   bloodCells(-108, -130, 4, C.oxygen);
+  co2Flow(-136, -6);
   const muscleDeck = platform(0, Y, -138, 20, 14, C.muscle);
   checkpoint(muscleDeck, new THREE.Vector3(0, Y, -134), '근육');
   muscle(0, 8, -138);
+  sign('산소는 온몸으로', 10, 6, -131, { width: 6, color: '#b45f2a', lines: ['산소는 온몸으로', '근육, 뇌, 위 모두', '산소가 필요해요'], rotY: -0.4 });
+  sign('이산화탄소는 폐로', -10, 6, -131, { width: 6, color: '#3986a8', lines: ['이산화탄소는 폐로', '세포가 쓰고 남은 이산화탄소는', '혈액이 폐로 실어 가요'], rotY: 0.4 });
   choiceGate({
     z: -144,
     y: Y,
     name: '근육',
-    question: '근육은 산소를 이용해 무엇을 할까요?',
-    hint: '움직임에 필요한 힘을 얻어요.',
+    question: '온몸의 세포는 산소를 이용해 무엇을 할까요?',
+    hint: '근육은 움직이는 데 필요한 힘을 얻어요.',
     options: [
       { text: '영양소에서 에너지 얻기', correct: true },
       { text: '뼈를 산소로 만들기' },
       { text: '피를 파란색으로 바꾸기' },
     ],
-    right: '맞아요! 근육 세포는 산소를 이용해 영양소에서 에너지를 얻어요.',
-    wrong: '근육은 산소와 영양소를 이용해 움직이는 데 필요한 에너지를 얻어요.',
+    right: '맞아요! 근육뿐 아니라 온몸의 세포가 산소로 영양소에서 에너지를 얻어요. 이때 생긴 이산화탄소는 혈액이 폐로 가져가요.',
+    wrong: '온몸의 세포는 산소와 영양소를 이용해 살아가는 데 필요한 에너지를 얻어요.',
     color: '#b45f2a',
   });
   const goal = platform(0, Y, -157, 16, 12, C.muscle);
@@ -233,6 +236,26 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
       const p = platform(0, Y, z, 14, 7, C.floor);
       if (z === z0) checkpoint(p, new THREE.Vector3(0, Y, z + 2), '동맥');
     }
+  }
+
+  // 이산화탄소: 세포가 쓰고 남은 기체를 혈액이 폐로 실어 간다 (산소와 반대 방향, 회색 알갱이)
+  function co2Flow(zFrom, zTo) {
+    const geo = new THREE.SphereGeometry(0.4, 10, 8);
+    const grains = [];
+    for (let i = 0; i < 16; i++) {
+      const m = new THREE.Mesh(geo, mat(0x8d99ae, { emissive: 0x3d4457, emissiveIntensity: 0.25 }));
+      root.add(m);
+      grains.push({ m, x: i % 2 ? 6.2 : -6.2, y: Y + 3.4 + (i % 3) * 0.4, off: i * ((zFrom - zTo) / 16) });
+    }
+    const span = zFrom - zTo;
+    movers.push({
+      root: null,
+      update(t) {
+        for (const g of grains) g.m.position.set(g.x, g.y, zFrom - ((((-t * 4 + g.off) % span) + span) % span));
+      },
+    });
+    sign('이산화탄소', -10, 5, -24, { width: 5, color: '#5a6478', lines: ['이산화탄소', '회색 알갱이는 폐로 돌아가', '숨으로 나가요'], rotY: 0.4 });
+    sign('산소', 10, 5, -24, { width: 4, color: '#2a9dba', lines: ['산소', '파란 알갱이는 폐에서', '온몸으로 가요'], rotY: -0.4 });
   }
 
   function bloodCells(z0, z1, count, color) {

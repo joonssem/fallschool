@@ -1,6 +1,6 @@
 // 맵 6: "거대 실험실"
-// 기체를 압축해 압력을 높이는 피스톤 장치와 액체에 뜨는 발판을 통과한다.
-// 구간: 안전 준비 → 기체 압력 피스톤 → 액체 높이 실험 → 실험대 → 출구
+// 같은 양의 공기를 눌러 부피가 줄어드는 피스톤 장치와 액체에 뜨는 발판을 통과한다.
+// 구간: 안전 준비 → 기체 부피 피스톤 → 액체 높이 실험 → 실험대 → 출구
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, shuffleGates, sectionFinder } from './kit.js';
 
@@ -18,8 +18,8 @@ const C = {
 
 const SECTIONS = [
   { name: '안전 준비', zMax: Infinity },
-  { name: '기체 압력 피스톤', zMax: -27 },
-  { name: '압력 실험대', zMax: -65 },
+  { name: '기체 부피 피스톤', zMax: -27 },
+  { name: '피스톤 실험대', zMax: -65 },
   { name: '액체 높이 실험', zMax: -96 },
   { name: '실험대', zMax: -126 },
   { name: '출구', zMax: -150 },
@@ -41,7 +41,7 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
   sign('거대 실험실', -8, 4, -1, {
     width: 6,
     color: '#326782',
-    lines: ['거대 실험실', '압력과 액체의 힘으로', '실험대를 지나가요'],
+    lines: ['거대 실험실', '공기의 부피와 물의 힘으로', '실험대를 지나가요'],
     rotY: 0.42,
   });
   safetyGlasses(8, 2, -5);
@@ -64,30 +64,30 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
     color: '#326782',
   });
 
-  // ─── 기체 압력 피스톤 ────────────────────────────────
+  // ─── 기체 부피 피스톤 ────────────────────────────────
   const pistonBase = platform(0, Y, -28, 18, 10, C.floor);
-  checkpoint(pistonBase, new THREE.Vector3(0, Y, -25), '압력 실험대');
+  checkpoint(pistonBase, new THREE.Vector3(0, Y, -25), '피스톤 실험대');
   challengeStar(-12.5, Y, -28);
-  label('기체 압력', -10, Y + 4, -29, ['기체를 누르면 공간이 줄고', '압력이 커져요'], '#326782');
+  label('기체의 부피', -10, Y + 4, -29, ['같은 양의 공기를 누르면', '차지하는 공간이 줄어요'], '#326782');
   choiceGate({
     z: -34,
     y: Y,
-    name: '압력',
-    question: '피스톤으로 기체를 누르면 압력은?',
-    hint: '같은 양의 기체가 더 작은 공간에 모여요.',
+    name: '기체 부피',
+    question: '피스톤으로 같은 양의 공기를 누르면 부피는?',
+    hint: '주사기 끝을 막고 피스톤을 눌러 본 적이 있나요?',
     options: [
-      { text: '커진다', correct: true },
-      { text: '작아진다' },
+      { text: '줄어든다', correct: true },
+      { text: '늘어난다' },
       { text: '항상 그대로다' },
     ],
-    right: '맞아요! 같은 양의 기체가 좁은 공간에 모이면 압력이 커져요.',
-    wrong: '피스톤이 기체를 누르면 입자들이 벽에 더 자주 부딪혀 압력이 커져요.',
+    right: '맞아요! 같은 양의 공기를 누르면 공기가 차지하는 공간(부피)이 줄어들어요.',
+    wrong: '피스톤을 누르면 같은 양의 공기가 차지하는 공간이 줄어들어요.',
     color: '#326782',
   });
 
   // 피스톤 머리 발판이 천천히 오르내린다. 좌우로 건너며 움직임을 살핀다.
   const pistonSteps = [
-    [-3, 2.5, -45], [3, 3.5, -55], [-2, 2.5, -65],
+    [-3, 2.5, -45], [3, 3, -55], [-2, 2.5, -65],
   ];
   pistonSteps.forEach(([x, y, z], i) => {
     pistonHead(x + 4.5, y, z);
@@ -103,43 +103,43 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
   challengeStar(12.5, Y, -74);
 
   // ─── 액체 높이와 뜨는 발판 ───────────────────────────
-  label('액체 높이', -9, 6, -78, ['액체에 잠긴 물체에는', '위쪽으로 뜨는 힘이 작용해요'], '#168aad');
+  label('액체 높이', -9, 6, -78, ['물속에 잠긴 물체를', '물이 위로 밀어 올려요'], '#168aad');
   const liquid = beaker(0, -3, -93, 10, 0x4cc9f0);
   // 비커 속 발판 하나는 물높이와 함께 천천히 올라갔다 내려온다.
   platform(0, 2.5, -84, 8, 6, C.liquid);
   const float = platform(0, 2.2, -92, 8, 6, C.liquid2, { dynamic: true, castShadow: true });
-  platform(0, 4.5, -100, 8, 6, C.liquid);
+  platform(0, 4, -100, 8, 6, C.liquid);
   movers.push({
     root: float,
     update(t) {
-      const height = 5.1 + (Math.sin(t * 0.45) + 1) * 0.75;
+      const height = 5.4 + (Math.sin(t * 0.45) + 1) * 0.6;
       liquid.scale.y = height / 5;
       liquid.position.y = -3 + height / 2;
       float.position.y = -3 + height + 0.2 - 0.5;
     },
   });
-  const cp2 = platform(0, 7, -108, 16, 10, C.checkpoint);
-  checkpoint(cp2, new THREE.Vector3(0, 7, -105), '비커 위쪽');
+  const cp2 = platform(0, 5.5, -108, 16, 10, C.checkpoint);
+  checkpoint(cp2, new THREE.Vector3(0, 5.5, -105), '비커 위쪽');
   choiceGate({
     z: -114,
-    y: 7,
+    y: 5.5,
     name: '뜨는 힘',
-    question: '물속에 잠긴 물체를 위로 밀어 올리는 힘은?',
-    hint: '물체가 액체 속에서 뜨거나 가벼워지는 것처럼 느껴져요.',
+    question: '물이 물체를 위로 밀어 올리는 힘은?',
+    hint: '물속에서 물체가 가벼워지는 것처럼 느껴져요.',
     options: [
       { text: '부력', correct: true },
       { text: '마찰력' },
       { text: '자기력' },
     ],
-    right: '맞아요! 액체가 물체를 위로 밀어 올리는 힘을 부력이라고 해요.',
-    wrong: '액체가 물체를 위로 밀어 올리는 힘은 부력이에요.',
+    right: '맞아요! 물이 물체를 위로 밀어 올리는 힘을 부력이라고 해요.',
+    wrong: '물이 물체를 위로 밀어 올리는 힘은 부력이에요.',
     color: '#168aad',
   });
 
   // ─── 실험대와 출구 ──────────────────────────────────
   const workbench = platform(0, Y, -128, 20, 12, C.floor);
   checkpoint(workbench, new THREE.Vector3(0, Y, -125), '실험대');
-  label('실험 기록', 10, 6, -129, ['압력은 기체를 누를수록 커지고', '액체는 물체를 위로 밀어요'], '#326782');
+  label('실험 기록', 10, 6, -129, ['공기를 누르면 부피가 줄고', '물은 물체를 위로 밀어 올려요'], '#326782');
   // 유리 막대가 돌아가는 조작 구간을 장식하고, 통로는 넓게 확보한다.
   const stirrer = new THREE.Group();
   stirrer.position.set(0, Y + 2, -139);
