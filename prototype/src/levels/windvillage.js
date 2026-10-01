@@ -56,7 +56,13 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
       const key = rows.join('|'); if (key === previous) return; previous = key;
       g.clearRect(0, 0, 768, 256); g.fillStyle = '#fff'; g.fillRect(0, 0, 768, 256);
       g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#24485b';
-      rows.forEach((row, i) => { g.font = `bold ${i === 0 ? 52 : 38}px "Malgun Gothic", sans-serif`; g.fillText(row, 384, 48 + i * 76); });
+      rows.forEach((row, i) => {
+        let size = i === 0 ? 52 : 38;
+        const font = (px) => `bold ${px}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+        g.font = font(size);
+        while (size > 22 && g.measureText(row).width > 720) g.font = font((size -= 2));
+        g.fillText(row, 384, 48 + i * 76);
+      });
       tex.needsUpdate = true;
     };
   }
