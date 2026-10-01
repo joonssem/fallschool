@@ -71,7 +71,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     z: -48,
     y: Y + 6,
     name: '응결',
-    question: '눈에 보이지 않는 수증기가 식어 작은 물방울이 되는 현상은?',
+    question: '수증기가 식어 물방울이 되는 현상은?',
     hint: '구름 속 공기의 온도가 내려가면 어떻게 될까요?',
     options: [
       { text: '공기가 식으며 응결', correct: true },

@@ -221,8 +221,8 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
     z: -119,
     y: Y,
     name: '섞으면?',
-    question: '묽은 염산에 염기성 용액을 조금씩 넣을 때, 아직 산성인 동안 산성의 세기는?',
-    hint: '묽은 수산화 나트륨 용액을 한 방울씩 넣어요',
+    question: '염산에 염기성 용액을 조금씩 넣으면?',
+    hint: '아직 산성인 동안 산성의 세기는?',
     options: [{ text: '점점 약해져요', correct: true }, { text: '점점 강해져요' }, { text: '변하지 않아요' }],
     right: '맞아요! 산성 용액에 염기성 용액을 넣을수록 산성이 점점 약해져요. 알맞은 양에서 중성이 되고, 더 넣으면 염기성이 돼요',
     wrong: [

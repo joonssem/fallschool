@@ -95,8 +95,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     z: -47,
     y: 8,
     name: '달',
-    question: '[관찰] 방금 달에서 뛰어 봤어요. 지구와 비교하면?',
-    hint: '지구 발사대에서 뛸 때와 비교해 봐요',
+    question: '[관찰] 달에서 뛰어 보니?',
+    hint: '지구에서 뛸 때와 비교해 봐요',
     options: [{ text: '지구보다 높이', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 낮게' }],
     right: '맞아요! 달에서 끌어당기는 힘(중력)은 지구의 약 1/6이라서 더 높이·멀리 가요. (게임에서는 조작하기 쉽게 약 1/3로 했어요)',
     wrong: [
@@ -125,8 +125,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     z: -118,
     y: 10,
     name: '화성',
-    question: '[비교] 방금 화성에서 뛰어 봤어요. 지구와 비교하면 화성의 중력은?',
-    hint: '지구와 달에서 뛰었을 때의 높이를 떠올려 봐요',
+    question: '[비교] 화성의 중력은 지구보다?',
+    hint: '지구·달에서 뛴 높이와 비교해요',
     options: [{ text: '지구보다 약해요', correct: true }, { text: '지구와 같아요' }, { text: '지구보다 세요' }],
     right: '맞아요! 화성의 중력은 지구의 약 0.38배예요. (게임에서는 약 0.45배)',
     wrong: [
@@ -138,7 +138,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   info(-1, 10, -119, '화성', '실제 중력: 지구의 약 0.38배', '게임 중력: 약 0.45배 (조작용으로 조정)');
   platform(0, 10, -140, 4, 30, C.mars);
   // 게임에서 바람으로 밀어내는 건 도전을 위한 과장: 실제 화성은 대기가 아주 얇아 같은 속도의 바람도 미는 힘이 훨씬 작다
-  sign('모래 폭풍', 0, 17.5, -125.6, { width: 7.5, color: '#b85c44', lines: ['모래 폭풍: 바위 옆에서 버텨요', '(게임을 위한 과장이에요)', '실제 화성은 대기가 얇아 바람이 미는 힘이 작아요'] });
+  sign('모래 폭풍', 0, 17.5, -125.6, { width: 7.5, color: '#b85c44', lines: ['모래 폭풍: 바위 옆에서 버텨요', '(게임을 위한 과장이에요)', '실제는 대기가 얇아 힘이 작아요'] });
   // 바람이 불어 가는 쪽 가장자리의 바위
   block(1.8, 11, -130, 0.4, 1, 2.5, C.marsDark);
   block(1.8, 11, -136, 0.4, 1, 2.5, C.marsDark);
@@ -184,7 +184,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   // ─── 소행성대: 가운데 바위를 딛고 건너기, 아래에는 궤도를 도는 안전망 발판 ──
   const m3 = platform(0, 10, -159, 10, 8, C.checkpoint);
   checkpoint(m3, new THREE.Vector3(0, 10, -159), '소행성대 앞');
-  info(1, 10, -162, '소행성대', '화성과 목성 사이에 작은 천체들이 띄엄띄엄 있어요', '게임 중력 약 0.5배는 조작용 (띠 전체의 중력은 없어요)', '#8d6e63');
+  info(1, 10, -162, '소행성대', '작은 천체들이 띄엄띄엄 있어요', '게임 0.5배는 조작용 (띠 전체 중력 없음)', '#8d6e63');
   platform(0, 10, -173, 6, 6, C.rock);
   const orbit = new THREE.Group();
   orbit.position.set(0, 8, -173);
@@ -224,8 +224,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     z: -206,
     y: 9,
     name: '목성',
-    question: '[예측] 이 문 뒤는 목성 구역이에요. 거기서 점프하면?',
-    hint: '목성은 태양계에서 가장 큰 행성이에요. 달에서는 어땠는지 떠올려 봐요',
+    question: '[예측] 목성에서 점프하면?',
+    hint: '이 문 뒤가 목성 구역이에요',
     options: [{ text: '지구보다 낮게', correct: true }, { text: '지구와 비슷하게' }, { text: '지구보다 높이' }],
     right: '맞아요! 목성은 구름 꼭대기 근처 중력이 지구의 약 2.5배예요. 점프가 낮아져요. (목성에는 딛는 땅이 없어서 발판은 게임 장치예요)',
     wrong: [
@@ -235,7 +235,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     color: '#e76f51',
   });
   // 문 뒤(-213)부터: 예전 좌표에서 25만큼 뒤로 민 값
-  info(-1, 9, -207, '목성', '실제: 구름 꼭대기 기준 지구의 약 2.5배', '게임 1.6배 (딛는 땅이 없어 발판은 게임 장치)', '#e76f51');
+  info(-1, 9, -207, '목성', '실제: 구름 꼭대기 기준 약 2.5배', '게임 1.6배 · 발판은 게임 장치', '#e76f51');
   platform(0, 9, -216.5, 6, 7, C.jupiter);
   // 정팔각형 회전판: 길이 2R·폭 2R·tan(22.5°) 직사각형 4장을 45°씩 돌려 겹치면 정팔각형이 된다.
   // 다리와의 틈이 거의 일정하다 (반지름 R=6, 꼭짓점까지 6.49)
@@ -270,8 +270,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     z: -255,
     y: 11,
     name: '토성',
-    question: '[비교] 토성에서 뛰어 봤어요. 목성에서 뛸 때와 비교해 토성의 중력은?',
-    hint: '목성 구역에서 뛴 느낌과 비교해 봐요',
+    question: '[비교] 토성의 중력은?',
+    hint: '목성에서 뛴 느낌과 비교해요',
     options: [{ text: '지구와 비슷해요', correct: true }, { text: '목성만큼 세요' }, { text: '달처럼 약해요' }],
     right: '맞아요! 토성은 목성 다음으로 크지만 구름 꼭대기 근처 중력은 지구와 비슷해요 (약 1.07배). 행성의 중력은 크기만으로 정해지지 않아요',
     wrong: [
@@ -281,7 +281,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
     color: '#b08900',
   });
   // 문 뒤(-262)부터: 예전 좌표에서 32만큼 뒤로 민 값
-  info(1, 11, -256, '토성', '실제: 구름 꼭대기 기준 지구의 약 1.07배', '게임 1.07배 (수치는 같고 발판·고리는 게임 장치)', '#b08900');
+  info(1, 11, -256, '토성', '실제: 구름 꼭대기 기준 약 1.07배', '게임 1.07배 · 발판·고리는 게임 장치', '#b08900');
   platform(0, 11, -276, 4, 28, C.station);
   const ring = new THREE.Group();
   ring.position.set(0, 11.6, -274);
@@ -307,7 +307,7 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
 
   // ─── 우주 정거장 (골인) ───────────────────────────────
   // 실제 정거장에도 중력은 있다(지표의 약 90%). 떠다니는 건 정거장과 사람이 함께 자유낙하하기 때문. 게임의 ×1은 걷기 위한 조작용 설정.
-  info(-1, 11, -283, '우주 정거장', '실제: 중력은 있지만 함께 떨어지며 떠다녀요', '게임 ×1은 걷기 쉽게 한 조작용 설정', '#118ab2');
+  info(-1, 11, -283, '우주 정거장', '실제: 중력은 있고 함께 자유낙하해요', '게임 ×1은 걷기 위한 조작용', '#118ab2');
   const station = platform(0, 11, -298, 14, 12, C.station);
   for (const sx of [-1, 1]) block(sx * 6.4, 18, -294, 1, 7, 1, C.accent, { castShadow: true });
   const arch = new THREE.Mesh(new THREE.BoxGeometry(13.8, 0.8, 1), mat(C.accent));
