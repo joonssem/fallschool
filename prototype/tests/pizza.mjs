@@ -1,10 +1,14 @@
 // 실제 발판 진입·오답 복구·문 통과·새 경기 초기화를 검증한다.
 import { THREE, PhysicsWorld, run, tally } from './harness.mjs';
-import { buildPizza } from '../src/levels/pizza.js';
+import { courseRoute, runRetry } from './course-helpers.mjs';
+import { buildPizza, orderLabel } from '../src/levels/pizza.js';
 const T = tally('분수 피자 공장');
+// 기존 시험은 주문량이 1/2, 3/4, 한 판일 때를 기준으로 쓰였으므로 주문량을 고정해서 만든다 (매 판 달라지는 주문량은 아래에서 따로 시험)
 const make = () => {
   const world = new PhysicsWorld();
-  return { world, level: buildPizza(new THREE.Scene(), world, { seed: 3 }) };
+  const level = buildPizza(new THREE.Scene(), world, { seed: 3 });
+  [4, 6, 8].forEach((t, i) => level.orders[i].setTarget(t));
+  return { world, level };
 };
 function tap(m, order, index) {
   const pad = order.pads[index];
@@ -42,7 +46,7 @@ for (const seed of [1, 5, 99]) {
     for (let i = 0; i < order.target / unit; i++) tap(path, order, order.units.length - 1);
   }
   path.level.update(1, 1, null); // 문이 열린 뒤 경로 확인
-  T.check(`전체 경로 ${seed}`, run(path, [0, 0, 5], [[0, -13], [0, -21], [0, -34], [0, -47], [0, -67], [0, -80], [0, -100], [0, -113], [0, -124]]));
+  T.check(`전체 경로 ${seed}`, runRetry(path, [0, 0, 5], courseRoute(path.level)));
   T.check(`결승 이벤트 ${seed}`, { ok: path.level.finished });
   path.level.resetProgress();
   T.check(`초기화 ${seed}`, { ok: !path.level.finished && path.level.orders.every((o) => !o.solved && o.total === 0) });
@@ -60,5 +64,41 @@ for (const order of walking.level.orders) {
   targets.push([0, order.z + 2], [0, order.z - 8]);
   T.check(`직접 걸어 주문 ${order.target}/8`, run(walking, [0, 1, order.z + 17], targets));
   T.check(`걸어서 주문 완성 ${order.target}/8`, { ok: order.solved });
+}
+
+// ── 매 판 다른 주문 (시드) ──
+const POOLS = [[2, 4], [4, 6], [6, 8]];
+const seen = new Set();
+for (let seed = 1; seed <= 24; seed++) {
+  const w = new PhysicsWorld();
+  const level = buildPizza(new THREE.Scene(), w, { seed });
+  const targets = level.orders.map((o) => o.target);
+  seen.add(targets.join());
+  T.check(`시드 ${seed}: 주문량이 후보 안`, { ok: targets.every((t, i) => POOLS[i].includes(t)), why: targets.join() });
+  T.check(`시드 ${seed}: 제목이 주문량과 일치`, { ok: level.orders.every((o) => o.heading.text.includes(orderLabel(o.target))), why: level.orders.map((o) => o.heading.text).join('/') });
+  T.check(`시드 ${seed}: HUD 구간 이름에 주문량`, { ok: level.orders.every((o) => level.sectionAt(o.z - 1).includes(orderLabel(o.target))), why: level.orders.map((o) => level.sectionAt(o.z - 1)).join('/') });
+  // 모든 주문량은 조각으로 만들 수 있고 다른 양은 풀리지 않는다
+  for (const o of level.orders) {
+    const unit = o.units.at(-1);
+    const l2 = buildPizza(new THREE.Scene(), new PhysicsWorld(), { seed });
+    const o2 = l2.orders[o.index];
+    for (let i = 0; i < o2.target - 1; i++) tap({ level: l2 }, o2, o2.units.length - 1);
+    if (unit === 1 && o2.target > 1) T.check(`시드 ${seed} 주문 ${o.index + 1}: 한 조각 모자라면 미완성`, { ok: !o2.solved, why: `${o2.total}/${o2.target}` });
+    tap({ level: l2 }, o2, o2.units.length - 1);
+    T.check(`시드 ${seed} 주문 ${o.index + 1}: 조각을 모아 완성(${o2.target}/8)`, { ok: o2.solved && o2.total === o2.target, why: `${o2.total}/${o2.target}` });
+  }
+}
+T.check('시드에 따라 다른 주문 조합이 나옴', { ok: seen.size >= 4, why: `${seen.size}가지` });
+{
+  const a = buildPizza(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  const same = buildPizza(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  T.check('같은 시드는 같은 주문(모든 화면이 같음)', { ok: a.orders.map((o) => o.target).join() === same.orders.map((o) => o.target).join() });
+  const before = a.orders.map((o) => o.target).join();
+  tap({ level: a }, a.orders[0], 0);
+  a.resetProgress();
+  T.check('처음부터는 주문량을 유지하고 조각만 비움', { ok: a.orders.map((o) => o.target).join() === before && a.orders[0].total === 0 });
+  let changed = false;
+  for (let s = 6; s < 30 && !changed; s++) { a.setSeed(s); changed = a.orders.map((o) => o.target).join() !== before; }
+  T.check('새 경기(시드)에서 주문량이 바뀌고 조각은 초기화', { ok: changed && a.orders.every((o) => o.total === 0 && !o.solved) });
 }
 T.report();

@@ -3,6 +3,12 @@
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, sectionFinder } from './kit.js';
 import { analyzeCubeNet, reflectPoint } from './geometry-math.js';
+import { connector, ROOM_STEP } from './course.js';
+import { rngFor, pick, shuffled } from './variants.js';
+
+// 방 z와 방 사이 연결 코스 종류 (방 사이는 달리기·점프·타이밍 구간)
+const ROOMS = [-34, -34 - ROOM_STEP, -34 - 2 * ROOM_STEP, -34 - 3 * ROOM_STEP];
+const KINDS = ['sweepers', 'movers', 'bar'];
 
 const FACE_COLORS = [0x82b6f4, 0x97cba9, 0xf3c979, 0xcbace2, 0xf4a6a6, 0x86ced1];
 export const NET_OPTIONS = [
@@ -17,6 +23,52 @@ export const NET_OPTIONS = [
     [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   ],
 ];
+
+// 매 판 다른 전개도: 정육면체가 되는 전개도(11가지 중 일부)와 되지 않는 전개도를 시드로 섞는다.
+// 방마다 정육면체가 되는 것 1개 + 되지 않는 것 2개이고 두 방이 서로 다른 전개도를 쓴다. (유효 여부는 analyzeCubeNet이 판정하며 시험이 확인한다)
+export const NET_POOL = {
+  valid: [
+    [[0, 0], [-1, 0], [1, 0], [0, 1], [0, -1], [0, -2]],
+    [[0, 0], [1, 0], [2, 0], [3, 0], [1, 1], [2, -1]],
+    [[0, 1], [1, 1], [2, 1], [3, 0], [3, 1], [3, 2]],
+    [[0, 1], [1, 1], [2, 0], [2, 1], [3, 0], [4, 0]],
+    [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1], [3, 0]],
+  ],
+  invalid: [
+    [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
+    [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]],
+    [[0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1]],
+    [[0, 1], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1]],
+    [[0, 3], [1, 3], [2, 0], [2, 1], [2, 2], [2, 3]],
+    [[0, 4], [1, 0], [1, 1], [1, 2], [1, 3], [1, 4]],
+  ],
+};
+/** 시드로 두 전개도 방의 보기를 고른다: [[보기 3개], [보기 3개]] (정답은 방마다 1개, 자리는 섞임) */
+export function netChoices(seed) {
+  const valid = shuffled(rngFor(seed, 10), NET_POOL.valid);
+  const invalid = shuffled(rngFor(seed, 11), NET_POOL.invalid);
+  return [0, 1].map((k) => shuffled(rngFor(seed, 12 + k), [valid[k], invalid[2 * k], invalid[2 * k + 1]]));
+}
+
+/**
+ * 시드로 대칭 문제를 만든다. axis: 기준선, 반환: { source, options } (정답은 reflectPoint로 계산, 오답 둘은 흔한 실수:
+ * 다른 기준선까지 접은 점, 기준선에서 거리가 다른 점). 격자 x -3~3, y -2~2 안, 정답이 1개뿐이다.
+ */
+export function symmetryProblem(seed, salt, axis) {
+  const rand = rngFor(seed, salt);
+  const i = axis.normal[0] ? 0 : 1; // 기준선에 수직인 좌표 축 (세로 기준선 x=0이면 x를 뒤집는다)
+  const source = [pick(rand, [-3, -2, -1, 1, 2, 3]), pick(rand, [-2, -1, 1, 2])]; // 기준선 위(0)는 피한다
+  const correct = reflectPoint(source, axis);
+  const inGrid = ([x, y]) => Math.abs(x) <= 3 && Math.abs(y) <= 2;
+  const step = correct[i] > 0 ? 1 : -1;
+  const farther = [...correct]; farther[i] += step; // 기준선에서 한 칸 더 먼 점
+  const closer = [...correct]; closer[i] -= step; // 한 칸 가까운 점 (기준선에서 1 이상 떨어지게 격자 안에서만)
+  const nearWrong = inGrid(farther) ? farther : closer;
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const second = [[-source[0], -source[1]], [source[0], -source[1]], [-source[0], source[1]]]
+    .find((c) => inGrid(c) && !same(c, correct) && !same(c, nearWrong) && !same(c, source));
+  return { source, options: shuffled(rand, [correct, nearWrong, second]) };
+}
 
 // 면을 잇는 실제 경첩 계층. 옳고 그른 전개도 모두 같은 방식으로 접는다.
 function foldingModel(root, cells, x, y, z) {
@@ -75,14 +127,18 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
     sectionAt: sectionFinder([
       { name: '도형 건축 연구소', zMax: Infinity },
       { name: '접기 실험실', zMax: -15 },
-      { name: '상자 발판 공장', zMax: -48 },
-      { name: '세로 기준선 대칭', zMax: -81 },
-      { name: '가로 기준선 대칭', zMax: -114 },
-      { name: '완성 전시실', zMax: -147 },
+      { name: '연결 코스', zMax: ROOMS[0] - 12 },
+      { name: '상자 발판 공장', zMax: ROOMS[1] + 19 },
+      { name: '연결 코스', zMax: ROOMS[1] - 12 },
+      { name: '세로 기준선 대칭', zMax: ROOMS[2] + 19 },
+      { name: '연결 코스', zMax: ROOMS[2] - 12 },
+      { name: '가로 기준선 대칭', zMax: ROOMS[3] + 19 },
+      { name: '완성 전시실', zMax: ROOMS[3] - 14 },
     ]),
     sky: { background: 0xdbeef5, fog: [0xdbeef5, 70, 180], hemi: 1.4 },
   });
-  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
+  const kit = makeKit(level);
+  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = kit;
   level.builders = [];
   platform(0, 0, 2, 20, 20, 0xa5c6d3);
   startCheckpoint('연구소 입구');
@@ -167,11 +223,21 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
     return state;
   }
 
-  function netRoom(z, options, title) {
+  function netRoom(z, title) {
     const state = room(z, title, 'net');
-    state.options = options;
-    state.models = options.map((cells, i) => foldingModel(level.root, cells, (i - 1) * 7, 4.8, z + 1));
-    options.forEach((_, i) => sign(`전개도 ${i + 1}`, (i - 1) * 7, 7, z + 1, { width: 4 }));
+    state.options = [];
+    state.models = [];
+    [0, 1, 2].forEach((i) => sign(`전개도 ${i + 1}`, (i - 1) * 7, 7, z + 1, { width: 4 }));
+    // 이 판의 보기 세 개: 이전 모델을 치우고 다시 만든다 (정육면체가 되는 것 1개 + 되지 않는 것 2개)
+    state.setNets = (options) => {
+      for (const m of state.models) {
+        level.root.remove(m.group);
+        m.group.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
+      }
+      state.options = options;
+      state.models = options.map((cells, i) => foldingModel(level.root, cells, (i - 1) * 7, 4.8, z + 1));
+      state.reset();
+    };
     state.refresh = () => state.models.forEach((m, i) => m.setFold(i === state.selected ? state.fold : 0));
     state.act = (p) => {
       if (p.action === 'select') {
@@ -195,11 +261,17 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
       if (result.valid) state.unlock();
       else level.onMessage?.('접힌 면을 비교하고 다른 전개도로 다시 도전해요.', false);
     };
+    return state;
   }
 
-  function symmetryRoom(z, axis, source, options, title) {
+  function symmetryRoom(z, axis, title) {
     const state = room(z, title, 'symmetry');
-    Object.assign(state, { axis, source, options, target: reflectPoint(source, axis) });
+    Object.assign(state, { axis, source: [0, 0], options: [[0, 0], [0, 0], [0, 0]], target: [0, 0] });
+    // 이 판의 문제: 출발점과 보기 세 개 (정답은 reflectPoint 로 계산)
+    state.setProblem = ({ source, options }) => {
+      Object.assign(state, { source, options, target: reflectPoint(source, axis) });
+      state.reset();
+    };
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 512;
     const ctx = canvas.getContext('2d');
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
@@ -221,12 +293,12 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
         ctx.beginPath(); ctx.arc(px(x), py(y), radius, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill();
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 24px "Malgun Gothic", sans-serif'; ctx.textBaseline = 'middle'; ctx.fillText(text, px(x), py(y));
       };
-      mark(source, '출발', '#315a78', 30);
-      options.forEach((point, i) => mark(point, String(i + 1), state.selected === i ? '#a65320' : '#667788', 25));
+      mark(state.source, '출발', '#315a78', 30);
+      state.options.forEach((point, i) => mark(point, String(i + 1), state.selected === i ? '#a65320' : '#667788', 25));
       if (state.selected >= 0) {
-        const chosen = options[state.selected];
+        const chosen = state.options[state.selected];
         ctx.strokeStyle = '#a65320'; ctx.lineWidth = 4; ctx.setLineDash([8, 6]);
-        ctx.beginPath(); ctx.moveTo(px(source[0]), py(source[1])); ctx.lineTo(px(chosen[0]), py(chosen[1])); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(px(state.source[0]), py(state.source[1])); ctx.lineTo(px(chosen[0]), py(chosen[1])); ctx.stroke(); ctx.setLineDash([]);
       }
       texture.needsUpdate = true;
     };
@@ -236,7 +308,7 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
       else if (state.selected < 0) state.show('먼저 위치 하나를 선택해요.');
       else {
         state.attempts++;
-        const point = options[state.selected];
+        const point = state.options[state.selected];
         const correct = point.every((n, i) => Math.abs(n - state.target[i]) < 1e-8);
         state.show(correct ? '기준선 양쪽의 같은 거리에 있어요. 다리 완성!' : '기준선까지 거리와 방향을 다시 비교해요.');
         if (correct) state.unlock();
@@ -245,20 +317,33 @@ export function buildGeometryLab(parent, world, { seed = 1 } = {}) {
       state.refresh();
     };
     state.refresh();
+    return state;
   }
 
-  netRoom(-34, NET_OPTIONS[0], '접기 실험실 · 여섯 면');
-  platform(0, 1, -47, 8, 6, 0xb4d6e3);
-  netRoom(-67, NET_OPTIONS[1], '상자 공장 · 다른 전개도');
-  platform(0, 1, -80, 8, 6, 0xb4d6e3);
-  symmetryRoom(-100, { normal: [1, 0] }, [-2, 1], [[1, 1], [2, -1], [2, 1]], '대칭 다리 · 세로 기준선');
-  platform(0, 1, -113, 8, 6, 0xb4d6e3);
-  symmetryRoom(-133, { normal: [0, 1] }, [-1, -2], [[-1, 2], [1, 2], [-1, 1]], '대칭 다리 · 가로 기준선');
-  platform(0, 1, -146, 8, 6, 0xb4d6e3);
-  const goal = platform(0, 1, -159, 20, 18, 0x97cba9);
-  sign('연구 완료!', 0, 5.5, -158, { width: 8, lines: ['연구 완료!', '면이 여섯 개면 모두 상자가 될까요?', '대칭인 점은 기준선에서 얼마나 떨어졌나요?'] });
-  finishPad(goal, -156);
-  level.setSeed = (s) => { level.seed = s; level.builders.forEach((b) => b.reset()); };
+  const connectors = [];
+  const link = (k) => connectors.push(connector(level, kit, { zStart: ROOMS[k] - 12, kind: KINDS[k], color: 0xb4d6e3, accent: 0xe08a5c, name: `연결 코스 ${k + 1}` }));
+  const rooms = [];
+  rooms.push(netRoom(ROOMS[0], '접기 실험실 · 여섯 면'));
+  link(0);
+  rooms.push(netRoom(ROOMS[1], '상자 공장 · 다른 전개도'));
+  link(1);
+  rooms.push(symmetryRoom(ROOMS[2], { normal: [1, 0] }, '대칭 다리 · 세로 기준선'));
+  link(2);
+  rooms.push(symmetryRoom(ROOMS[3], { normal: [0, 1] }, '대칭 다리 · 가로 기준선'));
+  const zl = ROOMS[3];
+  platform(0, 1, zl - 13, 8, 6, 0xb4d6e3);
+  const goal = platform(0, 1, zl - 26, 20, 18, 0x97cba9);
+  sign('연구 완료!', 0, 5.5, zl - 25, { width: 8, lines: ['연구 완료!', '면이 여섯 개면 모두 상자가 될까요?', '대칭인 점은 기준선에서 얼마나 떨어졌나요?'] });
+  finishPad(goal, zl - 23);
+  level.course = { rooms: ROOMS, connectors, tail: [[0, zl - 13], [0, zl - 24]], goalZ: zl - 23 }; // 시험에서 경로를 만들 때 쓴다
+  level.setSeed = (s) => {
+    level.seed = s;
+    const nets = netChoices(s);
+    rooms[0].setNets(nets[0]);
+    rooms[1].setNets(nets[1]);
+    rooms[2].setProblem(symmetryProblem(s, 20, { normal: [1, 0] }));
+    rooms[3].setProblem(symmetryProblem(s, 21, { normal: [0, 1] }));
+  };
   finalizeLevel(level);
   const resetProgress = level.resetProgress;
   level.resetProgress = () => { resetProgress(); level.builders.forEach((b) => b.reset()); };
