@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>점프 연구소 시험장</title>
+  <title>점프 연구소</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
@@ -53,7 +53,11 @@
     <div id="tp-url" class="tp-url"></div>
     <div id="tp-phase" class="tp-phase">대기실 (자유 연습)</div>
     <div class="tp-promise">출발 전 안내: 잡기·밀치기 없음 · 우리 반 모두 완주가 목표 · 문 앞에서는 멈춰서 생각하기</div>
-    <div id="tp-maps" class="tp-maps"></div>
+    <div class="tp-map-now">
+      <span>맵</span><b id="tp-map-name"></b>
+      <button id="tp-map-toggle" class="tp-btn">바꾸기</button>
+    </div>
+    <div id="tp-maps" class="tp-maps hidden"></div>
     <div class="tp-buttons">
       <button id="tp-start" class="tp-btn go">출발!</button>
       <button id="tp-freeze" class="tp-btn freeze">얼음!</button>
@@ -84,8 +88,8 @@
 
   <div id="overlay-start" class="overlay">
     <div class="panel">
-      <h1>점프 연구소 시험장</h1>
-      <p class="sub">친구들과 함께 장애물 코스를 달려요</p>
+      <h1>점프 연구소</h1>
+      <p class="sub">친구들과 함께 체험 코스를 달려요</p>
       <div class="promise">
         <b>우리 반 약속</b>
         <span>잡기·밀치기는 없어요 (친구와 부딪히지 않아요)</span>
@@ -107,8 +111,6 @@
         <button class="color-choice" data-color="#118ab2" aria-label="파랑"></button>
         <button class="color-choice" data-color="#f1faee" aria-label="하양"></button>
       </div>
-      <div class="maps" id="map-choices"><span>맵</span></div>
-      <p class="map-hint">혼자 연습과 방 만들기에 쓰는 맵 · 참가하면 선생님이 고른 맵으로 바뀌어요</p>
       <button id="btn-join" class="big">참가하기</button>
       <p id="start-msg" class="msg"></p>
       <div class="alt">
@@ -122,6 +124,19 @@
         <div><b>점프</b> 버튼 / <b>다이브</b> 버튼 (공중에서도 가능)</div>
         <div class="keys">키보드: WASD·방향키 이동, Space 점프, Shift 다이브, 마우스 끌기로 카메라</div>
       </details>
+    </div>
+  </div>
+
+  <!-- 혼자 연습할 맵 고르기 -->
+  <div id="overlay-maps" class="overlay hidden">
+    <div class="panel map-panel">
+      <h1>연습할 맵</h1>
+      <div id="map-tabs" class="map-tabs"></div>
+      <div id="map-grid" class="map-grid"></div>
+      <div class="map-actions">
+        <button id="btn-maps-back" class="link">뒤로</button>
+        <button id="btn-solo-go" class="big">연습 시작</button>
+      </div>
     </div>
   </div>
 

@@ -206,7 +206,8 @@ export function makeKit(level) {
       return { x, floor, back, labels };
     });
 
-    const gate = { z, y, name: name || `문 ${gates.length + 1}`, lanes, options, right, wrong, order: [0, 1, 2], answered: false };
+    // wrong 은 문자열 하나, 또는 단계별 배열 (첫 오답엔 생각할 거리, 다시 틀리면 정답 설명)
+    const gate = { z, y, name: name || `문 ${gates.length + 1}`, question, lanes, options, right, wrong: [].concat(wrong), tries: 0, order: [0, 1, 2], answered: false };
     gates.push(gate);
     return gate;
   }
@@ -298,6 +299,7 @@ export function shuffleGates(level, seed) {
     }
     gate.order = order; // order[문 번호] = 보기 번호
     gate.answered = false;
+    gate.tries = 0;
     gate.lanes.forEach((lane, li) => {
       const ok = gate.options[order[li]].correct;
       lane.floor.visible = ok;
@@ -321,7 +323,8 @@ function checkGates(level, player) {
     gate.answered = true;
     const li = gate.lanes.reduce((best, l, i) => (Math.abs(l.x - p.x) < Math.abs(gate.lanes[best].x - p.x) ? i : best), 0);
     const ok = gate.options[gate.order[li]].correct;
-    level.onMessage?.(ok ? gate.right : gate.wrong, ok);
+    if (!ok) gate.tries++;
+    level.onMessage?.(ok ? gate.right : gate.wrong[Math.min(gate.tries, gate.wrong.length) - 1], ok);
     level.onGateResult?.(gi, ok);
   });
 }
@@ -348,6 +351,7 @@ export function finalizeLevel(level) {
   };
   level.resetProgress = () => {
     level.finished = false;
+    for (const g of level.gates) g.tries = 0;
     for (const s of level.stars) {
       s.got = false;
       s.mesh.visible = true;

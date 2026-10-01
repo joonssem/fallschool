@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics.js';
 import { Player } from './player.js';
-import { MAPS, mapById } from './levels/index.js';
+import { mapById, mapsBySubject } from './levels/index.js';
 import { Input } from './input.js';
 import { Sfx } from './sfx.js';
 import { RemoteCrowd, stateCode } from './remote.js';
@@ -100,6 +100,8 @@ function loadMap(id, seed = Date.now() >>> 0) {
   };
   // 예측 문 첫 시도 결과 (경기마다 문 하나당 한 번만 기록)
   level.onGateResult = (gi, ok) => {
+    // 틀린 문은 바닥이 없어 곧 떨어진다: 이 낙하는 조작 실패가 아니므로 도움 점프를 켜지 않는다
+    if (!ok) game.conceptFall = true;
     if (game.gateFirst[gi]) return;
     game.gateFirst[gi] = ok ? 'o' : 'x';
     publishLearning();
@@ -149,6 +151,7 @@ const game = {
   stuckCp: -1, // 도움 점프: 같은 체크포인트에서 떨어진 횟수
   gateFirst: [], // 예측 문 첫 시도: 'o' 맞힘, 'x' 틀림
   stuckFalls: 0,
+  conceptFall: false, // 방금 예측 문을 틀려 떨어지는 중
 };
 
 const HELP_AFTER_FALLS = 3;
@@ -175,12 +178,14 @@ function startSpot() {
 
 function respawnAtCheckpoint(countFall) {
   const cp = currentCheckpoint();
+  const conceptFall = game.conceptFall; // 개념 오답으로 떨어졌는지 (도움 점프 계산에서만 제외, falls 기록은 그대로)
+  game.conceptFall = false;
   if (countFall) {
     game.falls++;
     if (net.mode === 'student' && phase() === 'racing') net.room.publishProgress({ falls: game.falls });
     // 같은 체크포인트에서 여러 번 떨어지면 다음 체크포인트까지 점프를 조금 높고 멀게 (본인 화면에서만)
     if (game.stuckCp !== game.cpIndex) (game.stuckCp = game.cpIndex), (game.stuckFalls = 0);
-    game.stuckFalls++;
+    if (!conceptFall) game.stuckFalls++;
     if (game.stuckFalls >= HELP_AFTER_FALLS && player.jumpBoost === 1 && !cp.noHelp) {
       player.jumpBoost = HELP_JUMP;
       toast('도움 점프가 켜졌어요! 다음 체크포인트까지 점프가 조금 더 높아요', { seconds: 3.5 });
@@ -200,6 +205,7 @@ function resetRun() {
   game.timerStarted = false;
   game.stuckCp = -1;
   game.stuckFalls = 0;
+  game.conceptFall = false;
   game.gateFirst = [];
   player.jumpBoost = 1;
   $('overlay-finish').classList.add('hidden');
@@ -325,15 +331,32 @@ document.querySelectorAll('.color-choice').forEach((btn) => {
 });
 player.setColor(parseInt(chosenColor.slice(1), 16));
 
-// 맵 고르기 (혼자 연습·방 만들기용). 고르면 바로 배경으로 보여 준다.
-$('map-choices').insertAdjacentHTML(
-  'beforeend',
-  MAPS.map((m) => `<button class="map-choice" data-map="${m.id}">${m.name}</button>`).join(''),
-);
-const markMap = () =>
-  document.querySelectorAll('.map-choice').forEach((b) => b.classList.toggle('selected', b.dataset.map === chosenMap));
-markMap();
-$('map-choices').addEventListener('click', (e) => {
+// 혼자 연습할 맵 고르기: 분류 탭 + 카드. 고르면 바로 배경으로 보여 준다. (반 참가는 선생님이 고른 맵으로 바뀐다)
+let mapTab = '';
+function renderMapCards() {
+  const groups = mapsBySubject();
+  $('map-tabs').innerHTML = ['', ...groups.map(([s]) => s)]
+    .map((s) => `<button class="map-tab${s === mapTab ? ' selected' : ''}" data-tab="${s}">${s || '전체'}</button>`)
+    .join('');
+  $('map-grid').innerHTML = groups
+    .filter(([s]) => !mapTab || s === mapTab)
+    .flatMap(([, list]) => list)
+    .map(
+      (m) =>
+        `<button class="map-card${m.id === chosenMap ? ' selected' : ''}" data-map="${m.id}"><b>${m.name}</b>` +
+        `<small>${m.blurb || ''}</small><span><i class="tag">${m.subject || '기타'}</i>${m.coop ? '<i class="tag coop">함께 하기</i>' : ''}</span></button>`,
+    )
+    .join('');
+}
+const markMap = renderMapCards;
+renderMapCards();
+$('map-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('button[data-tab]');
+  if (!tab) return;
+  mapTab = tab.dataset.tab;
+  renderMapCards();
+});
+$('map-grid').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-map]');
   if (!btn) return;
   chosenMap = btn.dataset.map;
@@ -402,6 +425,16 @@ $('btn-join').addEventListener('click', () =>
 );
 
 $('btn-solo').addEventListener('click', () => {
+  $('overlay-start').classList.add('hidden');
+  $('overlay-maps').classList.remove('hidden');
+  markMap();
+});
+$('btn-maps-back').addEventListener('click', () => {
+  $('overlay-maps').classList.add('hidden');
+  $('overlay-start').classList.remove('hidden');
+});
+$('btn-solo-go').addEventListener('click', () => {
+  $('overlay-maps').classList.add('hidden');
   net.mode = 'solo';
   store.set('color', chosenColor);
   if (chosenMap !== mapId) loadMap(chosenMap);
@@ -487,10 +520,19 @@ function setupTeacherPanel() {
   $('tp-freeze').addEventListener('click', () => net.room.setFrozen(!net.room.meta?.frozen));
   $('tp-end').addEventListener('click', () => net.room.endRace());
   $('tp-lobby').addEventListener('click', () => net.room.toLobby());
-  $('tp-maps').innerHTML = MAPS.map((m) => `<button class="tp-map" data-map="${m.id}">${m.name}</button>`).join('');
+  // 맵은 분류별로 묶어 접어 둔다 (맵이 늘어도 출발 버튼·학생 목록이 밀리지 않게)
+  $('tp-maps').innerHTML = mapsBySubject()
+    .map(
+      ([subject, list]) =>
+        `<div class="tp-map-group">${subject}</div>` +
+        list.map((m) => `<button class="tp-map" data-map="${m.id}">${m.name}</button>`).join(''),
+    )
+    .join('');
+  $('tp-map-toggle').addEventListener('click', () => $('tp-maps').classList.toggle('hidden'));
   $('tp-maps').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-map]');
     if (!btn || btn.disabled) return;
+    $('tp-maps').classList.add('hidden');
     net.room.setMap(btn.dataset.map);
   });
   $('tp-list').addEventListener('click', (e) => {
@@ -518,6 +560,9 @@ function renderTeacherControls() {
   $('tp-freeze').textContent = m.frozen ? '얼음 풀기' : '얼음!';
   // 맵은 경기 중이 아닐 때만 바꿀 수 있다
   const canChange = p === 'lobby' || p === 'result';
+  $('tp-map-name').textContent = mapById(mapId).name;
+  $('tp-map-toggle').disabled = !canChange;
+  if (!canChange) $('tp-maps').classList.add('hidden');
   document.querySelectorAll('#tp-maps .tp-map').forEach((b) => {
     b.classList.toggle('selected', b.dataset.map === mapId);
     b.disabled = !canChange;

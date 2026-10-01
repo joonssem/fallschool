@@ -63,18 +63,18 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
     color: '#a22c3a',
   });
 
-  // ─── 심장 판막: 두 사람이 함께 누르거나 한 명이 차례로 밟는다 ──
+  // ─── 심장 판막: 두 사람이 함께 누르거나 한 명이 차례로 밟는다 (선택 협동, 필수 아님. tests/coop.mjs) ──
   const heartDeck = platform(0, Y, -29, 20, 14, C.floor);
   checkpoint(heartDeck, new THREE.Vector3(0, Y, -26), '심장');
   challengeStar(-14, Y, -29);
   heart(0, 7, -35);
-  sign('심장 판막', 10, 6, -31, { width: 5, color: '#a22c3a', lines: ['심장이 뛰며', '혈액을 밀어 보내요'], rotY: -0.4 });
+  sign('심장 판막', 10, 6, -31, { width: 5.5, color: '#a22c3a', lines: ['심장 판막', '혈액이 한 방향으로만 흐르게 해요', '두 발판을 함께 밟으면 열려요 (게임 장치)'], rotY: -0.4 });
   platform(0, Y, -42, 20, 12, C.floor);
   valveDoor({
     z: -47,
     y: Y,
     plates: [[-6, -39], [6, -39]],
-    message: '함께 심장을 뛰게 했어요! 판막이 열려 혈액이 앞으로 흘러가요.',
+    message: '두 발판이 눌려 판막이 열렸어요! (게임 장치예요. 실제 판막은 혈액의 압력 차이로 열리고 닫혀요)',
   });
   platform(0, Y, -52, 18, 10, C.floor);
   const arteryDeck = platform(0, Y, -59, 18, 10, C.checkpoint);
