@@ -5,6 +5,11 @@
 // 협동: 직렬 문은 세 스위치가 동시에 이어져야 해서 친구와 나눠 서야 한다.
 // 스위치는 발에서 떨어진 뒤에도 잠시 이어져 있다 (방에 3명 이상이면 1.5초, 혼자·둘이면 7초 — 혼자 연습도 가능하게).
 // 발판 위에 누가 있는지는 각 화면이 모든 학생의 위치로 계산한다 (데이터베이스에 따로 쓰지 않는다).
+//
+// 직렬 문에서 뒤처진 학생: 아래 중 하나면 짧은 유지 대신 긴 유지(7초)를 쓴다. 세 스위치를 실제로 모두 밟아야 전구가 켜지는 건 그대로다.
+//   · 아직 문을 지나지 않은 학생(나 포함)이 3명 미만 (마지막 무리: 협동할 친구가 앞으로 다 지나갔다)
+//   · 내가 문 앞에서 PATIENCE 초 넘게 기다렸다 (친구가 접속을 끊었거나 멀리 있다)
+// 먼저 도착한 학생은 뒤에 학생이 많이 남아 있으므로 그대로 친구를 기다려 함께 누른다.
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, shuffleGates, sectionFinder } from './kit.js';
 
@@ -32,6 +37,9 @@ const SECTIONS = [
 const PLATE = 2.4; // 스위치 발판 한 변
 const LATCH_TEAM = 1.5;
 const LATCH_SOLO = 7;
+const PATIENCE = 30; // 직렬 문 앞에서 기다린 뒤 도움이 켜지는 시간(초)
+const WAIT_ZONE = 28; // 문 앞 이만큼(m) 안에 있을 때만 기다린 시간을 센다
+const TEAM_SIZE = 3; // 직렬 문 스위치 수
 
 export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   const level = createLevel(parent, world, {
@@ -54,14 +62,52 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     return m;
   }
 
-  function plateMesh(x, z, y) {
+  // 문 위 현황판: "이어진 스위치 N / M" (발판 상태이며 참여 학생 수가 아니다. 발에서 떨어진 뒤 잠시 이어진 스위치도 센다)
+  function board(x, y, z) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const g = canvas.getContext('2d');
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 2.8), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+    mesh.position.set(x, y, z);
+    root.add(mesh);
+    let shown = '';
+    return {
+      mesh,
+      set(rows, color) {
+        const key = rows.join('|') + color;
+        if (key === shown) return;
+        shown = key;
+        g.clearRect(0, 0, 512, 256);
+        g.fillStyle = '#ffffff';
+        g.beginPath();
+        g.roundRect(4, 4, 504, 248, 36);
+        g.fill();
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        rows.forEach((row, i) => {
+          let size = i === 0 ? 60 : 38;
+          const font = (px) => `bold ${px}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+          g.font = font(size);
+          while (size > 20 && g.measureText(row).width > 470) g.font = font((size -= 4));
+          g.fillStyle = i === 0 ? color : '#2b2d42';
+          g.fillText(row, 256, 62 + i * 70);
+        });
+        tex.needsUpdate = true;
+      },
+    };
+  }
+
+  function plateMesh(x, z, y, name = '스위치') {
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(PLATE, 0.08, PLATE),
       new THREE.MeshStandardMaterial({ color: C.plateOff, emissive: C.plateOff, emissiveIntensity: 0.25 }),
     );
     m.position.set(x, y + 0.05, z);
     root.add(m);
-    const label = sign('스위치', x, y + 2.6, z, { width: 2.2, color: '#2b2d42' });
+    const label = sign(name, x, y + 2.6, z, { width: 2.2, color: '#2b2d42' });
     return { x, z, y, mesh: m, label, until: -1, closed: false };
   }
 
@@ -86,7 +132,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     const bat = block(-DW / 2 - 1.2, y + 1.1, z + 0.8, 0.9, 1.1, 0.6, C.battery);
     bat.material = mat(C.battery, { emissive: C.battery, emissiveIntensity: 0.2 });
 
-    const ps = plates.map(([px, pz]) => plateMesh(px, pz, y));
+    const ps = plates.map(([px, pz], i) => plateMesh(px, pz, y, plates.length > 1 ? `스위치 ${'①②③④'[i]}` : '스위치'));
     const wires = [];
     const L = [-DW / 2 - 1.2, z + 0.8]; // 전지
     const R = [DW / 2 + 0.6, z + 0.2]; // 전구 쪽 (문 오른쪽 아래로 이어진다)
@@ -107,7 +153,16 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
       }
       wires.push(wire(prev[0], prev[1], R[0], R[1], y));
     }
-    const d = { z, y, kind, plates: ps, wires, door, home, bulb, open: false, lift: 0, message, told: false };
+    // 닫힌 회로로 읽히게: 전구 쪽 연결(기둥 + 가로대)과 전구에서 전지로 돌아오는 선
+    const loop = [wire(R[0], R[1], L[0], L[1], y)];
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, DH + 1.2, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
+    post.position.set(R[0], y + (DH + 1.2) / 2, R[1] + 0.1);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(R[0] - 0.4, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
+    bar.position.set((R[0] + 0.4) / 2, y + DH + 1.2, bulb.position.z);
+    root.add(post, bar);
+    loop.push(post, bar);
+    const info = board(0, y + H + 1.6, z + 0.05);
+    const d = { z, y, kind, plates: ps, wires, loop, info, door, home, bulb, open: false, lift: 0, message, told: false, wait: 0, helped: false };
     doors.push(d);
     return d;
   }
@@ -231,9 +286,23 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
       if (player) _feet.push(player.pos);
       const others = level.getOthers?.() || [];
       for (const o of others) _feet.push(o);
-      const latch = (level.getPlayerCount?.() ?? 1) >= 3 ? LATCH_TEAM : LATCH_SOLO;
+      const crowd = (level.getPlayerCount?.() ?? 1) >= 3;
 
       for (const d of doors) {
+        // 직렬 문: 앞서 설명한 두 경우에는 긴 유지 시간. 아직 문을 지나지 않은 학생 수는 나 포함.
+        if (d.kind === 'series' && player) {
+          let before = player.pos.z > d.z - 1 ? 1 : 0;
+          for (const o of others) if (o.z > d.z - 1) before++;
+          d.lastGroup = before < TEAM_SIZE;
+          const waiting = player.pos.z > d.z && player.pos.z < d.z + WAIT_ZONE;
+          d.wait = waiting && !d.open ? d.wait + dt : waiting ? 0 : player.pos.z <= d.z ? 0 : d.wait;
+          if (!d.helped && d.wait > PATIENCE) {
+            d.helped = true;
+            level.onMessage?.(`도움이 켜졌어요! 이 문의 스위치는 이제 ${LATCH_SOLO}초 동안 이어져요. 세 스위치를 모두 밟아 보세요`, true);
+          }
+          if (player.pos.z <= d.z) d.helped = false;
+        }
+        const latch = !crowd || (d.kind === 'series' && (d.lastGroup || d.helped)) ? LATCH_SOLO : LATCH_TEAM;
         for (const p of d.plates) {
           const on = _feet.some((f) => Math.abs(f.x - p.x) < PLATE / 2 + 0.2 && Math.abs(f.z - p.z) < PLATE / 2 + 0.2 && f.y > p.y - 0.5 && f.y < p.y + 1.5);
           if (on) p.until = t + latch;
@@ -246,6 +315,12 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
         }
         const open = d.kind === 'parallel' ? d.plates.some((p) => p.closed) : d.plates.every((p) => p.closed);
         d.open = open;
+        for (const w of d.loop) setGlow(w, open);
+        const closedN = d.plates.filter((p) => p.closed).length;
+        const need = d.kind === 'parallel' ? '1개만 이어져도 켜져요' : d.plates.length > 1 ? `${d.plates.length}개 모두 이어져야 켜져요` : '스위치를 눌러 이어요';
+        const rows = [`이어진 스위치 ${closedN} / ${d.plates.length}`, need];
+        if (d.kind === 'series' && (d.lastGroup || d.helped) && crowd) rows.push(`스위치가 ${LATCH_SOLO}초 이어져요`);
+        d.info.set(rows, open ? '#06a77d' : '#d1495b');
         if (d.kind === 'parallel') {
           for (const p of d.plates) for (const w of p.wires) setGlow(w, p.closed);
         } else {
@@ -277,6 +352,9 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     level.seed = s;
     for (const d of doors) {
       d.told = false;
+      d.wait = 0;
+      d.helped = false;
+      d.lastGroup = false;
       for (const p of d.plates) p.until = -1;
     }
     shuffleGates(level, s);

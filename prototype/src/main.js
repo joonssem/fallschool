@@ -100,6 +100,8 @@ function loadMap(id, seed = Date.now() >>> 0) {
   };
   // 예측 문 첫 시도 결과 (경기마다 문 하나당 한 번만 기록)
   level.onGateResult = (gi, ok) => {
+    // 틀린 문은 바닥이 없어 곧 떨어진다: 이 낙하는 조작 실패가 아니므로 도움 점프를 켜지 않는다
+    if (!ok) game.conceptFall = true;
     if (game.gateFirst[gi]) return;
     game.gateFirst[gi] = ok ? 'o' : 'x';
     publishLearning();
@@ -149,6 +151,7 @@ const game = {
   stuckCp: -1, // 도움 점프: 같은 체크포인트에서 떨어진 횟수
   gateFirst: [], // 예측 문 첫 시도: 'o' 맞힘, 'x' 틀림
   stuckFalls: 0,
+  conceptFall: false, // 방금 예측 문을 틀려 떨어지는 중
 };
 
 const HELP_AFTER_FALLS = 3;
@@ -175,12 +178,14 @@ function startSpot() {
 
 function respawnAtCheckpoint(countFall) {
   const cp = currentCheckpoint();
+  const conceptFall = game.conceptFall; // 개념 오답으로 떨어졌는지 (도움 점프 계산에서만 제외, falls 기록은 그대로)
+  game.conceptFall = false;
   if (countFall) {
     game.falls++;
     if (net.mode === 'student' && phase() === 'racing') net.room.publishProgress({ falls: game.falls });
     // 같은 체크포인트에서 여러 번 떨어지면 다음 체크포인트까지 점프를 조금 높고 멀게 (본인 화면에서만)
     if (game.stuckCp !== game.cpIndex) (game.stuckCp = game.cpIndex), (game.stuckFalls = 0);
-    game.stuckFalls++;
+    if (!conceptFall) game.stuckFalls++;
     if (game.stuckFalls >= HELP_AFTER_FALLS && player.jumpBoost === 1 && !cp.noHelp) {
       player.jumpBoost = HELP_JUMP;
       toast('도움 점프가 켜졌어요! 다음 체크포인트까지 점프가 조금 더 높아요', { seconds: 3.5 });
@@ -200,6 +205,7 @@ function resetRun() {
   game.timerStarted = false;
   game.stuckCp = -1;
   game.stuckFalls = 0;
+  game.conceptFall = false;
   game.gateFirst = [];
   player.jumpBoost = 1;
   $('overlay-finish').classList.add('hidden');
