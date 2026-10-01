@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/giantlab.mjs && node tests/body-water.mjs body && node tests/body-water.mjs water && node tests/valve.mjs && node tests/pizza.mjs && node tests/colorstudio.mjs && node tests/geometrylab.mjs && node tests/coop.mjs && node tests/solar-gates.mjs && node tests/maps-meta.mjs && node tests/wind.mjs && node tests/windvillage.mjs"
+    "test": "node tests/giantlab.mjs && node tests/body-water.mjs body && node tests/body-water.mjs water && node tests/valve.mjs && node tests/pizza.mjs && node tests/colorstudio.mjs && node tests/geometrylab.mjs && node tests/coop.mjs && node tests/solar-gates.mjs && node tests/maps-meta.mjs && node tests/wind.mjs && node tests/windvillage.mjs && node tests/acid-lab.mjs"
   },
   "devDependencies": {
     "three": "0.170.0"
