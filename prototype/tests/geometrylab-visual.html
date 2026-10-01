@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>도형 건축 연구소 시각 검증</title>
+<style>
+  body { margin:0; font:16px system-ui,sans-serif; background:#dbeef5; color:#25314d; }
+  header { padding:12px; background:white; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0 12px 0 0; }
+  button { padding:9px 12px; border:1px solid #667799; border-radius:8px; background:white; cursor:pointer; }
+  #report { display:block; padding:10px 16px; background:white; min-height:24px; }
+  canvas { display:block; width:100%; }
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<header>
+  <h1>도형 연구소 · 개발 검증</h1>
+  <button data-room="0" data-choice="0">첫 전개도 정답 접기</button>
+  <button data-room="0" data-choice="1">틀린 전개도 접기</button>
+  <button data-room="1" data-choice="1">다른 전개도 정답 접기</button>
+  <button data-room="2" data-choice="2">세로 대칭 정답</button>
+  <button data-room="2" data-choice="0">세로 대칭 오답</button>
+  <button data-room="3" data-choice="0">가로 대칭 정답</button>
+  <button id="clear">펼치기·선택 지우기</button>
+  <button id="finish">접힘 결과 보기</button>
+</header>
+<output id="report" aria-live="polite">실제 맵의 접힘·대칭판을 확인합니다.</output>
+<script type="module">
+  import * as THREE from 'three';
+  import { PhysicsWorld } from '../src/physics.js';
+  import { buildGeometryLab } from '../src/levels/geometrylab.js';
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xdbeef5);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x707080, 1.4));
+  const light = new THREE.DirectionalLight(0xffffff, 2);
+  light.position.set(8, 20, 10); scene.add(light);
+  const level = buildGeometryLab(scene, new PhysicsWorld());
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 180);
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  document.body.append(renderer.domElement);
+  function resize() {
+    const h = Math.max(360, innerHeight - 160);
+    renderer.setSize(innerWidth, h); camera.aspect = innerWidth / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize();
+  let current = 0;
+  function tap(state, index) {
+    const pad = state.pads[index];
+    level.update(0, 1 / 120, { pos:new THREE.Vector3(pad.x, 1.15, pad.z) });
+    level.update(0, 1 / 120, { pos:new THREE.Vector3(0, 1, state.z + 18) });
+  }
+  function show(index, choice) {
+    current = index;
+    const state = level.builders[index]; state.reset();
+    camera.position.set(0, 6.5, state.z + 25); camera.lookAt(0, 4.7, state.z + 1);
+    tap(state, choice); tap(state, 4);
+  }
+  document.querySelectorAll('[data-room]').forEach((b) => b.addEventListener('click', () => show(+b.dataset.room, +b.dataset.choice)));
+  document.querySelector('#clear').addEventListener('click', () => tap(level.builders[current], 3));
+  document.querySelector('#finish').addEventListener('click', () => level.update(performance.now() / 1000, 2, null));
+  let last = performance.now(), lastReport = '';
+  renderer.setAnimationLoop((now) => {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    level.update(now / 1000, dt, null); renderer.render(scene, camera);
+    const state = level.builders[current];
+    const text = state.kind === 'net'
+      ? `전개도 ${state.selected + 1} · ${state.folding ? '접는 중' : state.fold > 0.99 ? state.models[state.selected].analysis.reason : '펼친 상태'} · ${state.solved ? '길 열림' : '다시 도전 가능'}`
+      : `${current === 2 ? '세로' : '가로'} 기준선 · 위치 ${state.selected < 0 ? '미선택' : state.selected + 1} · ${state.solved ? '대칭 다리 완성' : '거리·방향 다시 비교'}`;
+    if (text !== lastReport) { document.querySelector('#report').textContent = text; lastReport = text; }
+  });
+  show(0, 0);
+</script>
+</html>

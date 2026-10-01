@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>색과 빛 공방 시각 검증</title>
+<style>
+  body { margin:0; font:16px system-ui,sans-serif; background:#e3e9fa; color:#25314d; }
+  header { padding:14px; background:white; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0 16px 0 0; }
+  button { padding:10px 14px; border:1px solid #667799; border-radius:8px; background:#fff; cursor:pointer; }
+  #report { display:block; padding:10px 16px; background:#fff; min-height:24px; }
+  canvas { display:block; width:100%; }
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<header>
+  <h1>색과 빛 공방 · 개발 검증 화면</h1>
+  <button data-stage="0" data-mask="5">물감 · 초록</button>
+  <button data-stage="0" data-mask="7">물감 · 세 색</button>
+  <button data-stage="2" data-mask="3">빛 · 노랑</button>
+  <button data-stage="3" data-mask="7">빛 · 세 색</button>
+  <button id="check">16개 색 조합의 그림 검사</button>
+</header>
+<output id="report" aria-live="polite">개발용 화면: 실제 맵의 모형과 재질을 확인합니다.</output>
+<script type="module">
+  import * as THREE from 'three';
+  import { PhysicsWorld } from '../src/physics.js';
+  import { buildColorStudio } from '../src/levels/colorstudio.js';
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xe3e9fa);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x707080, 1.4));
+  const light = new THREE.DirectionalLight(0xffffff, 2);
+  light.position.set(8, 20, 10); scene.add(light);
+  const level = buildColorStudio(scene, new PhysicsWorld());
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 180);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  document.body.append(renderer.domElement);
+  function resize() {
+    const h = Math.max(360, innerHeight - 120);
+    renderer.setSize(innerWidth, h); camera.aspect = innerWidth / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize();
+  function tap(state, index) {
+    const pad = state.pads[index];
+    level.update(0, 1 / 120, { pos: new THREE.Vector3(pad.x, 1.15, pad.z) });
+    level.update(0, 1 / 120, { pos: new THREE.Vector3(0, 1, state.z + 18) });
+  }
+  function choose(index, mask, report = true) {
+    const state = level.mixers[index]; state.reset();
+    for (let bit = 0; bit < 3; bit++) if (mask & (1 << bit)) tap(state, bit);
+    camera.position.set(0, 6.5, state.z + 24); camera.lookAt(0, 4.7, state.z + 1);
+    if (report) document.querySelector('#report').textContent = `${state.mode === 'paint' ? '물감 모형' : '빛 모형'} · 선택 ${mask} · 겹침 결과를 목표와 비교하세요.`;
+  }
+  document.querySelectorAll('[data-stage]').forEach((b) => b.addEventListener('click', () => choose(+b.dataset.stage, +b.dataset.mask)));
+  document.querySelector('#check').addEventListener('click', () => {
+    const expected = {
+      paint: [0xffffff, 0x00ffff, 0xff00ff, 0x0000ff, 0xffff00, 0x00ff00, 0xff0000, 0x000000],
+      light: [0x000000, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff],
+    };
+    let pass = 0; const failures = [];
+    for (const index of [0, 2]) {
+      const state = level.mixers[index];
+      const diagram = scene.getObjectByName(`mixing-diagram-${state.mode}-${state.z + 0.8}`);
+      for (let mask = 0; mask < 8; mask++) {
+        choose(index, mask, false);
+        const p = diagram.material.map.image.getContext('2d').getImageData(256, 195, 1, 1).data;
+        const actual = (p[0] << 16) | (p[1] << 8) | p[2];
+        if (actual === expected[state.mode][mask]) pass++;
+        else failures.push(`${state.mode}/${mask}: ${actual.toString(16)}`);
+      }
+    }
+    document.querySelector('#report').textContent = `그림 검사 ${pass}/16 통과${failures.length ? ' · 실패 ' + failures.join(', ') : ' · 모든 겹침 영역 색 일치'}`;
+  });
+  choose(0, 5);
+  renderer.setAnimationLoop(() => { level.update(performance.now() / 1000, 1 / 60, null); renderer.render(scene, camera); });
+</script>
+</html>

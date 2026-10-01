@@ -6,6 +6,9 @@ import { buildCircuit } from './circuit.js';
 import { buildWater } from './water.js';
 import { buildGiantLab } from './giantlab.js';
 import { buildBody } from './body.js';
+import { buildPizza } from './pizza.js';
+import { buildColorStudio } from './colorstudio.js';
+import { buildGeometryLab } from './geometrylab.js';
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', build: buildLevel },
@@ -15,6 +18,9 @@ export const MAPS = [
   { id: 'water', name: '물의 순환 구름 공장', build: buildWater },
   { id: 'giantlab', name: '거대 실험실', build: buildGiantLab },
   { id: 'body', name: '인체 대탐험', build: buildBody },
+  { id: 'pizza', name: '분수 피자 공장', build: buildPizza },
+  { id: 'colorstudio', name: '색과 빛의 미술 공방', build: buildColorStudio },
+  { id: 'geometrylab', name: '도형 건축 연구소', build: buildGeometryLab },
 ];
 
 export const mapById = (id) => MAPS.find((m) => m.id === id) || MAPS[0];
