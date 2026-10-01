@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><title>그림자 극장 시각 검증</title>
+<style>body{margin:0;font:16px system-ui;background:#25223e;color:white}header{padding:12px;display:flex;gap:8px;flex-wrap:wrap}button{padding:9px}output{display:block;padding:10px}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<header><button data-room="0">1막 거리</button><button data-room="1">2막 회전</button><button data-room="2">3막 위치</button><button data-room="3">4막 조합</button><button id="step">한 단계 바꾸기</button><button id="solve">목표 만들기</button><button id="submit">공연 완성</button><button id="clear">처음 모양</button></header>
+<output id="report"></output>
+<script type="module">
+import * as THREE from 'three';
+import { PhysicsWorld } from '../src/physics.js';
+import { buildShadowTheater } from '../src/levels/shadowtheater.js?visual=4';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x25223e);scene.add(new THREE.HemisphereLight(0xffffff,0x707080,1.8));
+const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(8,20,10);scene.add(light);
+const level=buildShadowTheater(scene,new PhysicsWorld());
+const camera=new THREE.PerspectiveCamera(55,1,.1,180), renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);
+function resize(){const h=Math.max(360,innerHeight-110);renderer.setSize(innerWidth,h);camera.aspect=innerWidth/h;camera.updateProjectionMatrix()}addEventListener('resize',resize);resize();
+let current=0;
+const solutions=[[['distance',-1],['distance',-1],['distance',-1]],[['rotate',1],['rotate',1],['rotate',1]],[['x',.25],['x',.25],['y',.25],['y',.25]],[['x',.25],['x',.25],['x',.25],['select',1],['x',-.25],['x',-.25],['x',-.25]]];
+function tap(name,value){const s=level.theaters[current],p=s.pads.find(p=>p.action===name&&(value===undefined||p.value===value));level.update(0,1/120,{pos:new THREE.Vector3(p.x,1.15,p.z)});level.update(0,1/120,{pos:new THREE.Vector3(0,1,s.z+19)})}
+function show(i){current=i;const s=level.theaters[i];s.reset();camera.position.set(0,7,s.z+25);camera.lookAt(0,5.8,s.z+1)}
+document.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>show(+b.dataset.room));
+document.querySelector('#step').onclick=()=>tap(...solutions[current][0]);
+document.querySelector('#solve').onclick=()=>{level.theaters[current].reset();for(const a of solutions[current])tap(...a)};
+document.querySelector('#submit').onclick=()=>tap('submit');document.querySelector('#clear').onclick=()=>tap('clear');
+renderer.setAnimationLoop(now=>{level.update(now/1000,1/60,null);renderer.render(scene,camera);const s=level.theaters[current];document.querySelector('#report').textContent=`${current+1}막 · 일치 ${(s.similarity*100).toFixed(1)}% · ${s.solved?'길 열림':'비교 중'}`});show(0);
+</script></html>

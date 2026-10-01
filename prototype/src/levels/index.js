@@ -10,6 +10,7 @@ import { buildPizza } from './pizza.js';
 import { buildColorStudio } from './colorstudio.js';
 import { buildGeometryLab } from './geometrylab.js';
 import { buildWindVillage } from './windvillage.js';
+import { buildShadowTheater } from './shadowtheater.js';
 
 // 맵 항목: id, name, build + (선택) subject(분류), blurb(한 줄 설명), coop(친구와 함께 해야 하는 장치가 있나)
 // 선택 화면은 subject 로 묶어 보여 준다. 적지 않으면 '기타'.
@@ -27,6 +28,7 @@ export const MAPS = [
   { id: 'colorstudio', name: '색과 빛의 미술 공방', subject: '미술', blurb: '물감과 빛을 섞어 결과를 비교해요', coop: false, build: buildColorStudio },
   { id: 'geometrylab', name: '도형 건축 연구소', subject: '수학', blurb: '전개도를 접고 대칭 다리를 만들어요', coop: false, build: buildGeometryLab },
   { id: 'windvillage', name: '바람마을', subject: '지구·우주', blurb: '바람 방향을 보고 순풍 길을 골라요', coop: false, build: buildWindVillage },
+  { id: 'shadowtheater', name: '그림자 변신 극장', subject: '물리', blurb: '물체를 바꿔 그림자 공연을 만들어요', coop: false, build: buildShadowTheater },
 ];
 
 // 분류별로 묶기: [[분류, [맵…]], …] (SUBJECTS 순서, 모르는 분류는 뒤에)
