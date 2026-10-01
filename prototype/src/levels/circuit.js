@@ -62,7 +62,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     return m;
   }
 
-  // 문 위 현황판: "이어진 스위치 N / M" (발판 상태이며 참여 학생 수가 아니다. 발에서 떨어진 뒤 잠시 이어진 스위치도 센다)
+  // 문 옆 현황판: "이어진 스위치 N / M" (발판 상태이며 참여 학생 수가 아니다. 발에서 떨어진 뒤 잠시 이어진 스위치도 센다)
   function board(x, y, z) {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
@@ -153,15 +153,22 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
       }
       wires.push(wire(prev[0], prev[1], R[0], R[1], y));
     }
-    // 닫힌 회로로 읽히게: 전구 쪽 연결(기둥 + 가로대)과 전구에서 전지로 돌아오는 선
-    const loop = [wire(R[0], R[1], L[0], L[1], y)];
+    // 전구 양쪽을 각각 연결한다. 바닥에서 R→L을 바로 잇는 선은 전구를 우회하므로 두지 않는다.
+    const loop = [];
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, DH + 1.2, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
     post.position.set(R[0], y + (DH + 1.2) / 2, R[1] + 0.1);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(R[0] - 0.4, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
     bar.position.set((R[0] + 0.4) / 2, y + DH + 1.2, bulb.position.z);
     root.add(post, bar);
     loop.push(post, bar);
-    const info = board(0, y + H + 1.6, z + 0.05);
+    const returnPost = new THREE.Mesh(new THREE.BoxGeometry(0.22, DH + 1.2, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
+    returnPost.position.set(L[0] - 0.6, y + (DH + 1.2) / 2, bulb.position.z);
+    const returnBar = new THREE.Mesh(new THREE.BoxGeometry(-L[0] + 0.2, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: C.wireOff }));
+    returnBar.position.set((L[0] - 1) / 2, y + DH + 1.2, bulb.position.z);
+    root.add(returnPost, returnBar);
+    loop.push(returnPost, returnBar, wire(L[0] - 0.6, bulb.position.z, L[0] - 0.45, L[1], y));
+    // 기본 카메라에서도 읽히도록 높은 문 위 대신 왼쪽 벽 앞에 둔다.
+    const info = board(-6.6, y + 4.1, z + 0.1);
     const d = { z, y, kind, plates: ps, wires, loop, info, door, home, bulb, open: false, lift: 0, message, told: false, wait: 0, helped: false };
     doors.push(d);
     return d;

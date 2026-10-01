@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바람마을 시각 검증</title>
+<style>
+body{margin:0;font:16px system-ui,sans-serif;background:#c7e8f4;color:#24485b}
+header{padding:12px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0 12px 0 0}button{padding:9px;border:1px solid #678;border-radius:8px;background:white;cursor:pointer}
+output{display:block;padding:10px;background:white}canvas{display:block}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<header><h1>바람마을 · 개발 검증</h1>
+<button data-view="entry">입구·학생 아이디어</button><button data-view="fork">순풍·역풍 갈림길</button>
+<button data-view="air">상승·하강 기류</button><button data-view="coast">해안 다리</button>
+<button data-time="8">낮·해풍</button><button data-time="24">밤·육풍</button><button data-time="16">낮밤 전환</button>
+</header><output id="report">같은 맵 코드의 표시를 확인합니다.</output>
+<script type="module">
+import * as THREE from 'three';
+import { PhysicsWorld } from '../src/physics.js';
+import { buildWindVillage } from '../src/levels/windvillage.js?visual=1';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xc7e8f4);
+scene.add(new THREE.HemisphereLight(0xffffff,0x707080,1.5));
+const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(8,20,10);scene.add(sun);
+const level=buildWindVillage(scene,new PhysicsWorld());
+const camera=new THREE.PerspectiveCamera(60,1,0.1,400);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);
+let time=8,current='entry';
+const views={entry:[[0,6,14],[0,2,-8]],fork:[[0,15,-24],[0,0,-49]],air:[[0,10,-64],[0,3,-84]],coast:[[-8,8,-94],[-8,3,-113]]};
+function draw(){const [pos,target]=views[current];camera.position.set(...pos);camera.lookAt(...target);level.update(time,0,null);renderer.render(scene,camera);
+document.querySelector('#report').textContent=`구간: ${current} · 공유 시간 ${time}초 · ${time===8?'낮 해풍':time===24?'밤 육풍':'낮밤 전환'}`;}
+function resize(){const h=Math.max(360,innerHeight-140);renderer.setSize(innerWidth,h);camera.aspect=innerWidth/h;camera.updateProjectionMatrix();draw();}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{current=b.dataset.view;draw();}));
+document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{time=+b.dataset.time;draw();}));
+window.addEventListener('resize',resize);resize();
+</script>
+</html>
