@@ -1,10 +1,11 @@
 // 맵 1: 장애물 코스 "점프 연구소 시험장"
 // 구간: 출발 → 몸풀기 계단 → 숨은 발판 → 회전 막대 광장 → 움직이는 발판·바람 다리 → 시소 다리
-//       → (2부 시험 구간) 좁은 평균대 → 징검다리 → 사라지는 발판 → 컨베이어 → 얼음 판 → 점프 패드 탑 → 해머 복도 → 맞바람 → 골인 언덕
+//       → (2부 시험 구간) 좁은 평균대 → 징검다리 → 사라지는 발판 → 컨베이어 → 얼음 판 → 점프 패드 탑 → 해머 복도 → 맞바람·돌풍 → 골인 언덕
 // 2026-10-02: 이 맵을 "게임성 시험 맵"으로 쓴다. 학생이 쉬는 시간에 혼자 연습하는 맵이라 난이도를 올리고 장애물을 다양하게 시험한다.
 // 구간마다 이름(난이도 ★)이 달라 교사 화면의 구간별 낙하 횟수로 어느 장애물이 어려운지 볼 수 있다. docs/31 참고.
 import * as THREE from 'three';
 import { mulberry32, sectionFinder, createLevel, makeKit, finalizeLevel } from './levels/kit.js';
+import { dynamicSign } from './levels/variants.js';
 
 const COLORS = {
   start: 0xb8a9ff,
@@ -42,19 +43,19 @@ export const DIFFICULTY = {
     label: '쉬움', sweep: [1.2, -0.9], mover: 0.8, piston: 1.3, fan: 3.6,
     beam: [2.8, 2.4, 2.0, 1.6], gaps: [2.2, 2.6, 3.0, 3.4, 3.8],
     blink: { P: 4.4, vis: 3.9, warn: 1.0 }, belts: [2.4, 2.6, 3.1], hammer: 0.8,
-    wind: { power: 6.5, calm: 1.8, ramp: 0.6, strong: 2.2, fade: 0.5 },
+    wind: { power: 6.5, calm: 1.4, ramp: 0.5, strong: 2.0, fade: 0.5, dirs: ['front', 'left', 'right'] }, // 6.5 < 걷기 7이라 밀려도 뒤로 가지는 않는다
   },
   normal: {
     label: '기본', sweep: [1.5, -1.15], mover: 1.0, piston: 1.6, fan: 4.2,
     beam: [2.4, 1.8, 1.4, 1.0], gaps: [2.4, 3.0, 3.6, 4.1, 4.6],
     blink: { P: 4.4, vis: 3.6, warn: 0.9 }, belts: [3.2, 3.4, 4.2], hammer: 1.0,
-    wind: { power: 9, calm: 1.4, ramp: 0.6, strong: 2.6, fade: 0.5 },
+    wind: { power: 9, calm: 1.2, ramp: 0.5, strong: 2.2, fade: 0.5, dirs: ['front', 'left', 'right'] },
   },
   hard: {
     label: '어려움', sweep: [1.9, -1.5], mover: 1.3, piston: 2.0, fan: 4.8,
     beam: [2.0, 1.5, 1.2, 0.9], gaps: [2.6, 3.3, 3.9, 4.4, 4.7],
     blink: { P: 4.4, vis: 3.2, warn: 0.8 }, belts: [4.0, 4.2, 5.2], hammer: 1.25,
-    wind: { power: 10, calm: 1.2, ramp: 0.6, strong: 3.0, fade: 0.5 },
+    wind: { power: 10, calm: 1.0, ramp: 0.5, strong: 2.4, fade: 0.5, dirs: ['front', 'left', 'fr', 'right', 'fl'] }, // 어려움은 비스듬한 바람도 분다
   },
 };
 
@@ -517,40 +518,98 @@ export function buildLevel(parent, world, { seed = Date.now(), difficulty = 'nor
   zc -= 26;
   stage('해머 복도 뒤');
 
-  // 8) 맞바람: 바람이 시작 쪽으로 불어 온다 (벽 뒤에서 쉬었다 달린다)
-  extStart('맞바람 ★★★');
-  extSign('맞바람: 벽 뒤에서 쉬었다 달려라');
-  const HZ = { zMin: zc - 28, zMax: zc, power: D.wind.power };
-  platform(0, 5, zc - 14, 9, 28, COLORS.bridge);
-  const shelters = [6, 13, 20].map((sz, i) => {
-    const x = i % 2 ? 1.8 : -1.8;
-    block(x, 6.9, zc - sz, 3.6, 1.9, 0.8, COLORS.pillar, { castShadow: true });
-    return { xMin: x - 2.2, xMax: x + 2.2, zMin: zc - sz, zMax: zc - sz + 4 }; // 벽 뒤(시작 쪽)는 바람이 약하다
+  // 8) 맞바람·돌풍: 바람이 앞·왼쪽·오른쪽(어려움은 비스듬히도)에서 번갈아 분다.
+  // 가로 벽·세로 벽·ㄱ자 벽 중 바람 방향과 각도를 생각해 벽 뒤에 숨는다. 바람이 오는 쪽으로 6m 안에 벽이 있고 몸이 벽에 가려지면 안전하다(점프로 벽 위로 올라가면 맞는다).
+  // 바람 방향과 세기는 시간 t로만 정해져 모든 화면이 같다. 다음 돌풍의 방향은 바람이 시작되기 전(예고)부터 화살표로 보인다.
+  extStart('맞바람·돌풍 ★★★');
+  extSign('돌풍: 화살표 방향을 보고 벽 뒤에 숨어라');
+  const WL = 38, WW = 12; // 길이·폭
+  const HZ = { zMin: zc - WL, zMax: zc, xMax: WW / 2, power: D.wind.power };
+  platform(0, 5, zc - WL / 2, WW, WL, COLORS.bridge);
+  for (const sx of [-1, 1]) block(sx * (WW / 2 + 0.2), 6.2, zc - WL / 2, 0.4, 1.2, WL, 0xcfd8dc); // 가장자리 난간 (옆바람에 밀려도 떨어지지 않게. 낮아서 바람막이는 아니다)
+  const R2 = Math.SQRT1_2;
+  const WDIR = { front: [0, 1], left: [1, 0], right: [-1, 0], fl: [R2, R2], fr: [-R2, R2] }; // (x, z) 바람이 가는 방향. z+는 시작 쪽
+  const WDIR_NAME = { front: '앞에서', left: '왼쪽에서', right: '오른쪽에서', fl: '앞 왼쪽에서', fr: '앞 오른쪽에서' };
+  const SEQ = D.wind.dirs;
+  const GP = D.wind.calm + D.wind.ramp + D.wind.strong + D.wind.fade;
+  // 바람막이 벽: 가로(x로 긴 벽)는 앞바람을, 세로(z로 긴 벽)는 옆바람을, ㄱ자는 비스듬한 바람을 막는다.
+  // 6곳, 곳마다 가로 벽 + 세로 벽(ㄱ자) (+ 반대편 세로 벽). 어느 방향의 바람이든 앞쪽 6m 안에 막아 주는 곳이 있게 배치했다(tests/lab.mjs가 확인).
+  const WALLS = [];
+  [4, 10, 16, 22, 28, 34].forEach((dzs, i) => {
+    const side = i % 2 ? 1 : -1;
+    WALLS.push({ cx: side * 2, dz: dzs, w: 5, d: 0.8, h: 1.9 }); // 가로 벽 (앞바람)
+    WALLS.push({ cx: side * 2 - side * 2.9, dz: dzs + 1.6, w: 0.8, d: 4, h: i % 3 === 2 ? 2.8 : 1.9 }); // 세로 벽 (옆바람, 가로 벽 끝에 붙은 ㄱ자). 보라색은 점프해도 가려지는 높은 벽
+    if (i % 2 === 0) WALLS.push({ cx: -side * 3.8, dz: dzs + 3, w: 0.8, d: 3.5, h: 1.9 }); // 반대편 세로 벽
   });
+  WALLS.forEach((wl) => { wl.cz = zc - wl.dz; wl.top = 5 + wl.h; });
+  for (const wl of WALLS) block(wl.cx, wl.top, wl.cz, wl.w, wl.h, wl.d, wl.h > 2 ? 0x8338ec : COLORS.pillar, { castShadow: true });
+  const SHELTER_REACH = 6;
+  // 바람이 가는 방향 w=(wx, wz)일 때 pos가 벽에 가려지는가: 바람이 오는 쪽(-w)으로 SHELTER_REACH m 안에 벽이 있고 몸(허리 높이)이 벽보다 낮다
+  const sheltered = (pos, w) => {
+    for (const wl of WALLS) {
+      if (pos.y + 0.9 > wl.top) continue;
+      const x0 = wl.cx - wl.w / 2, x1 = wl.cx + wl.w / 2, z0 = wl.cz - wl.d / 2, z1 = wl.cz + wl.d / 2;
+      let tmin = 0, tmax = SHELTER_REACH, ok = true;
+      for (const [p, d, a, b] of [[pos.x, -w[0], x0, x1], [pos.z, -w[1], z0, z1]]) {
+        if (Math.abs(d) < 1e-9) { if (p < a || p > b) { ok = false; break; } }
+        else { let t1 = (a - p) / d, t2 = (b - p) / d; if (t1 > t2) [t1, t2] = [t2, t1]; tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); if (tmin > tmax) { ok = false; break; } }
+      }
+      if (ok) return true;
+    }
+    return false;
+  };
+  // 시각 t의 돌풍: 방향, 세기(0~1), 예고 중인지. 한 번의 돌풍은 예고(잔잔) → 거세짐 → 강풍 → 약해짐
+  const gustAt = (t) => {
+    const k = Math.floor(t / GP);
+    const u = t - k * GP;
+    const name = SEQ[((k % SEQ.length) + SEQ.length) % SEQ.length];
+    let s = 0;
+    const { calm, ramp, strong, fade } = D.wind;
+    if (u >= calm) s = u < calm + ramp ? (u - calm) / ramp : u < calm + ramp + strong ? 1 : 1 - (u - calm - ramp - strong) / fade;
+    return { name, dir: WDIR[name], strength: s, preview: u < calm, u };
+  };
+  level.gustAt = gustAt;
+  level.headwindStrength = (t) => gustAt(t).strength;
+  level.sheltered = sheltered;
+  level.shelters = WALLS;
+  level.headwindZone = HZ;
+  // 방향 화살표 (예고: 노랑, 강풍: 빨강, 약해지는 중: 회색). 길 위 세 곳에 세운다.
+  const arrows = [4, 19, 34].map((dzA) => {
+    const a = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 9.5, zc - dzA), 4.2, 0xffe066, 1.4, 0.9);
+    scene.add(a);
+    return a;
+  });
+  const windLabel = dynamicSign(scene, { x: 0, y: 12.5, z: zc - 1.5, width: 6.4, rows: 2, color: '#577590' });
   const streaks = [];
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 26; i++) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }));
     scene.add(m);
-    streaks.push({ m, x: ((i * 37) % 9) - 4.5, y: 5.6 + (i % 4) * 0.7, p: i / 22 });
+    streaks.push({ m, lat: ((i * 37) % 13) - 6, y: 5.6 + (i % 4) * 0.7, p: i / 26 });
   }
-  level.headwindStrength = (t) => gust(t, D.wind.calm, D.wind.ramp, D.wind.strong, D.wind.fade);
-  level.shelters = shelters;
-  level.headwindZone = HZ;
+  const cz0 = zc - WL / 2;
   movers.push({ root: null, update(t, dt) {
-    const s = level.headwindStrength(t);
+    const g = gustAt(t);
+    const [wx, wz] = g.dir;
+    const color = g.strength >= 1 ? 0xef476f : g.strength > 0 ? 0xf4845f : g.preview ? 0xffe066 : 0x90a4ae;
+    for (const a of arrows) { a.setDirection(new THREE.Vector3(wx, 0, wz)); a.setColor(color); }
+    windLabel.set([`바람 ${WDIR_NAME[g.name]} 불어요`, g.preview ? '곧 시작! 벽 뒤로 숨어요' : g.strength >= 1 ? '강풍! 벽 뒤에서 버텨요' : '바람이 약해져요']);
     for (const k of streaks) {
-      k.p = (k.p + dt * (0.15 + s * 0.9)) % 1;
-      k.m.position.set(k.x, k.y, HZ.zMax - 28 + k.p * 28);
-      k.m.material.opacity = s * 0.55;
+      k.p = (k.p + dt * (0.1 + g.strength * 0.9)) % 1;
+      const along = (k.p - 0.5) * 34;
+      k.m.position.set(wx * along + wz * k.lat, k.y, cz0 + wz * along - wx * k.lat); // 바람 방향으로 흐르고, 옆(수직) 위치는 줄마다 다르다
+      k.m.rotation.y = Math.atan2(wx, wz);
+      k.m.material.opacity = g.strength * 0.55;
     }
   } });
   extWind.push((pos, out, t) => {
-    if (pos.z > HZ.zMax || pos.z < HZ.zMin || pos.y < 4.5 || pos.y > 10 || Math.abs(pos.x) > 5) return;
-    for (const sh of shelters) if (pos.x > sh.xMin && pos.x < sh.xMax && pos.z > sh.zMin && pos.z < sh.zMax) return;
-    out.z += level.headwindStrength(t) * HZ.power;
+    if (pos.z > HZ.zMax || pos.z < HZ.zMin || pos.y < 4.5 || pos.y > 10 || Math.abs(pos.x) > HZ.xMax + 0.5) return;
+    const g = gustAt(t);
+    if (g.strength <= 0 || sheltered(pos, g.dir)) return;
+    out.x += g.dir[0] * g.strength * HZ.power;
+    out.z += g.dir[1] * g.strength * HZ.power;
   });
-  zc -= 28;
-  stage('맞바람 뒤');
+  zc -= WL;
+  stage('맞바람·돌풍 뒤');
   extStart('골인 언덕');
   const dz = zc + 222; // 골인 구간을 새 끝(zc)으로 옮기는 값 (음수)
 
