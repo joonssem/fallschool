@@ -2,6 +2,15 @@
 // 실제 물감의 재료·비율·조명 조건을 계산하는 물리 시뮬레이션은 아니다.
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, sectionFinder } from './kit.js';
+import { connector, ROOM_STEP } from './course.js';
+import { dynamicSign, rngFor, pick } from './variants.js';
+
+// 작업실 z와 작업실 사이 연결 코스 종류 (작업실 사이는 달리기·점프·타이밍 구간)
+const ROOMS = [-34, -34 - ROOM_STEP, -34 - 2 * ROOM_STEP, -34 - 3 * ROOM_STEP];
+const KINDS = ['movers', 'sweepers', 'bar'];
+
+// 매 판 다른 작품: 물감 두 작업실과 빛 첫 무대는 두 색 섞기(세 가지 중), 마지막 빛 무대는 세 색(흰색)
+const TWO_COLOR = [3, 5, 6];
 
 const SOURCES = {
   paint: [
@@ -76,15 +85,19 @@ export function buildColorStudio(parent, world, { seed = 1 } = {}) {
   const level = createLevel(parent, world, {
     sectionAt: sectionFinder([
       { name: '색과 빛의 미술 공방', zMax: Infinity },
-      { name: '물감 작업실 · 초록', zMax: -15 },
-      { name: '물감 작업실 · 빨강', zMax: -48 },
-      { name: '빛 무대 · 노랑', zMax: -81 },
-      { name: '빛 무대 · 흰색', zMax: -114 },
-      { name: '비교 전시실', zMax: -147 },
+      { name: '작업실 1', zMax: -15 },
+      { name: '연결 코스', zMax: ROOMS[0] - 12 },
+      { name: '작업실 2', zMax: ROOMS[1] + 19 },
+      { name: '연결 코스', zMax: ROOMS[1] - 12 },
+      { name: '작업실 3', zMax: ROOMS[2] + 19 },
+      { name: '연결 코스', zMax: ROOMS[2] - 12 },
+      { name: '작업실 4', zMax: ROOMS[3] + 19 },
+      { name: '비교 전시실', zMax: ROOMS[3] - 14 },
     ]),
     sky: { background: 0xe3e9fa, fog: [0xe3e9fa, 70, 180], hemi: 1.4 },
   });
-  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
+  const kit = makeKit(level);
+  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = kit;
   level.mixers = [];
   platform(0, 0, 2, 20, 20, 0xa8b8de);
   startCheckpoint('공방 입구');
@@ -92,22 +105,23 @@ export function buildColorStudio(parent, world, { seed = 1 } = {}) {
   platform(0, 0.5, -13, 10, 6, 0xbdb0e3);
   platform(0, 1, -21, 10, 6, 0xa8b8de);
 
-  function workshop({ z, mode, targetMask, title }) {
+  function workshop({ index, z, mode }) {
+    const title = `${mode === 'light' ? '빛' : '물감'} ${mode === 'light' ? index - 1 : index + 1}`;
+    const suffix = mode === 'light' ? '무대' : '작품';
     const light = mode === 'light';
     const deck = platform(0, 1, z + 8, 24, 24, light ? 0x46506b : 0xe7d2b1);
     const cp = checkpoint(deck, new THREE.Vector3(0, 1, z + 17), title);
     cp.noHelp = true;
-    const target = mixedColor(mode, targetMask);
-    const state = { z, mode, target, mask: 0, solved: false, attempts: 0, pads: [] };
+    const state = { z, mode, index, target: mixedColor(mode, 0), targetMask: 0, mask: 0, solved: false, attempts: 0, pads: [] };
     level.mixers.push(state);
-    sign(title, 0, 8.5, z + 1, { width: 6, color: light ? '#364b8b' : '#8b4c32' });
+    const heading = dynamicSign(level.root, { x: 0, y: 8.5, z: z + 1, width: 6, color: light ? '#364b8b' : '#8b4c32' });
     sign('겹치는 곳 관찰', 0, 7, z + 1, { width: 5 });
     const diagram = mixingDiagram(level.root, mode, 0, 4.3, z + 0.8);
     const goalSwatch = new THREE.Mesh(new THREE.PlaneGeometry(3, 3),
-      new THREE.MeshBasicMaterial({ color: target.hex, toneMapped: false, fog: false }));
+      new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false }));
     goalSwatch.position.set(-6.5, 4.3, z + 0.9);
     level.root.add(goalSwatch);
-    sign(`목표 · ${target.name}`, -6.5, 6.5, z + 1, { width: 4 });
+    const goalLabel = dynamicSign(level.root, { x: -6.5, y: 6.5, z: z + 1, width: 4 });
     const resultSwatch = new THREE.Mesh(new THREE.PlaneGeometry(3, 1),
       new THREE.MeshBasicMaterial({ color: mixedColor(mode, 0).hex, toneMapped: false, fog: false }));
     resultSwatch.position.set(6.5, 3.7, z + 0.9);
@@ -164,12 +178,12 @@ export function buildColorStudio(parent, world, { seed = 1 } = {}) {
           else if (pad.action === 'clear') state.mask = 0;
           else {
             state.attempts++;
-            const correct = mixedColor(mode, state.mask).hex === target.hex;
+            const correct = mixedColor(mode, state.mask).hex === state.target.hex;
             if (correct) {
               state.solved = true;
-              bridge.material.color.setHex(target.hex);
+              bridge.material.color.setHex(state.target.hex);
               level.onMessage?.('작품 완성! 길이 열렸어요. 조합을 바꿔 더 관찰해도 길은 유지돼요.', true);
-            } else level.onMessage?.(`지금 결과는 ${mixedColor(mode, state.mask).name}이에요. 목표 ${target.name}과 비교하고 조합을 바꿔요.`, false);
+            } else level.onMessage?.(`지금 결과는 ${mixedColor(mode, state.mask).name}이에요. 목표 ${state.target.name}과 비교하고 조합을 바꿔요.`, false);
           }
           paint();
         }
@@ -179,6 +193,16 @@ export function buildColorStudio(parent, world, { seed = 1 } = {}) {
       door.position.y = 4 + lift * 7;
       door.userData.collider.enabled = lift < 0.95;
     } });
+    // 이 판의 목표 색: 제목·목표 견본·글이 함께 바뀌고 조합은 초기화된다
+    state.setTarget = (mask) => {
+      state.targetMask = mask;
+      state.target = mixedColor(mode, mask);
+      goalSwatch.material.color.setHex(state.target.hex);
+      heading.set([`${title} · ${state.target.name} ${suffix}`]);
+      goalLabel.set([`목표 · ${state.target.name}`]);
+      state.reset();
+    };
+    state.heading = heading;
     state.reset = () => {
       state.mask = 0; state.solved = false; state.attempts = 0; lift = 0;
       door.position.y = 4; door.userData.collider.enabled = true;
@@ -188,22 +212,41 @@ export function buildColorStudio(parent, world, { seed = 1 } = {}) {
     paint();
   }
 
-  workshop({ z: -34, mode: 'paint', targetMask: 5, title: '물감 1 · 초록 작품' });
-  platform(0, 1, -47, 8, 6, 0xbdb0e3);
-  workshop({ z: -67, mode: 'paint', targetMask: 6, title: '물감 2 · 빨강 작품' });
-  platform(0, 1, -80, 8, 6, 0x8e9dc5);
-  workshop({ z: -100, mode: 'light', targetMask: 3, title: '빛 1 · 노랑 무대' });
-  platform(0, 1, -113, 8, 6, 0x8e9dc5);
-  workshop({ z: -133, mode: 'light', targetMask: 7, title: '빛 2 · 흰색 무대' });
-  platform(0, 1, -146, 8, 6, 0xbdb0e3);
-  const goal = platform(0, 1, -159, 24, 18, 0xaabbe1);
-  sign('비교 전시실', 0, 8, -160, { width: 6, lines: ['물감과 빛은 다르게 섞여요', '세 가지를 모두 사용했을 때 비교해요'] });
-  mixingDiagram(level.root, 'paint', -6, 4.5, -160, 7, 5);
-  mixingDiagram(level.root, 'light', 6, 4.5, -160, 7, 5);
-  sign('물감 모형 · 겹친 곳은 검정', -6, 1.9, -160, { width: 6 });
-  sign('빛 모형 · 겹친 곳은 흰색', 6, 1.9, -160, { width: 6 });
-  finishPad(goal, -156);
-  level.setSeed = (s) => { level.seed = s; level.mixers.forEach((m) => m.reset()); };
+  const connectors = [];
+  const link = (k, color, accent) => connectors.push(connector(level, kit, { zStart: ROOMS[k] - 12, kind: KINDS[k], color, accent, name: `연결 코스 ${k + 1}` }));
+  workshop({ index: 0, z: ROOMS[0], mode: 'paint' });
+  link(0, 0xbdb0e3, 0xd96a8c);
+  workshop({ index: 1, z: ROOMS[1], mode: 'paint' });
+  link(1, 0x8e9dc5, 0xd96a8c);
+  workshop({ index: 2, z: ROOMS[2], mode: 'light' });
+  link(2, 0x8e9dc5, 0xf2b84d);
+  workshop({ index: 3, z: ROOMS[3], mode: 'light' });
+  const zl = ROOMS[3];
+  platform(0, 1, zl - 13, 8, 6, 0xbdb0e3);
+  const goal = platform(0, 1, zl - 26, 24, 18, 0xaabbe1);
+  sign('비교 전시실', 0, 8, zl - 27, { width: 6, lines: ['물감과 빛은 다르게 섞여요', '세 가지를 모두 사용했을 때 비교해요'] });
+  mixingDiagram(level.root, 'paint', -6, 4.5, zl - 27, 7, 5);
+  mixingDiagram(level.root, 'light', 6, 4.5, zl - 27, 7, 5);
+  sign('물감 모형 · 겹친 곳은 검정', -6, 1.9, zl - 27, { width: 6 });
+  sign('빛 모형 · 겹친 곳은 흰색', 6, 1.9, zl - 27, { width: 6 });
+  finishPad(goal, zl - 23);
+  level.course = { rooms: ROOMS, connectors, tail: [[0, zl - 13], [0, zl - 24]], goalZ: zl - 23 }; // 시험에서 경로를 만들 때 쓴다
+  level.setSeed = (s) => {
+    level.seed = s;
+    const paint1 = pick(rngFor(s, 0), TWO_COLOR);
+    const paint2 = pick(rngFor(s, 1), TWO_COLOR.filter((m) => m !== paint1));
+    const light1 = pick(rngFor(s, 2), TWO_COLOR);
+    [paint1, paint2, light1, 7].forEach((mask, i) => level.mixers[i].setTarget(mask));
+  };
+  // 구간 이름(HUD)에 이 판의 목표 색을 붙인다
+  const baseSection = level.sectionAt;
+  level.sectionAt = (z) => {
+    const name = baseSection(z);
+    const m = /^작업실 (\d)$/.exec(name);
+    if (!m) return name;
+    const st = level.mixers[+m[1] - 1];
+    return `${st.mode === 'light' ? '빛 무대' : '물감 작업실'} · ${st.target.name}`;
+  };
   finalizeLevel(level);
   const resetProgress = level.resetProgress;
   level.resetProgress = () => { resetProgress(); level.mixers.forEach((m) => m.reset()); };

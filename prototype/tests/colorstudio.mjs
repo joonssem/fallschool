@@ -1,9 +1,14 @@
 import { THREE, PhysicsWorld, run, tally } from './harness.mjs';
+import { courseRoute, runRetry } from './course-helpers.mjs';
 import { buildColorStudio, mixedColor } from '../src/levels/colorstudio.js';
 const T = tally('색과 빛의 미술 공방');
+// 기존 시험은 목표가 초록·빨강·노랑·흰색일 때를 기준으로 쓰였으므로 목표를 고정해서 만든다 (매 판 달라지는 목표는 아래에서 따로 시험)
+const FIXED = [5, 6, 3, 7];
 const make = (seed = 1) => {
   const world = new PhysicsWorld();
-  return { world, level: buildColorStudio(new THREE.Scene(), world, { seed }) };
+  const level = buildColorStudio(new THREE.Scene(), world, { seed });
+  level.mixers.forEach((m, i) => m.setTarget(FIXED[i]));
+  return { world, level };
 };
 function tap(m, state, index) {
   const pad = state.pads[index];
@@ -62,7 +67,7 @@ for (const seed of [1, 5, 99]) {
     T.check(`걸어서 조합·제출·통과 ${seed}/${index}`, run(path, [0, 1, state.z + 17], steps));
     T.check(`완성 기록 ${seed}/${index}`, { ok: state.solved && state.attempts === 1 });
   }
-  T.check(`전체 경로 ${seed}`, run(path, [0, 0, 5], [[0, -13], [0, -21], [0, -34], [0, -47], [0, -67], [0, -80], [0, -100], [0, -113], [0, -133], [0, -146], [0, -157]]));
+  T.check(`전체 경로 ${seed}`, runRetry(path, [0, 0, 5], courseRoute(path.level)));
   T.check(`결승 ${seed}`, { ok: path.level.finished });
   path.level.resetProgress();
   T.check(`처음부터 ${seed}`, { ok: !path.level.finished && path.level.mixers.every((s) => s.mask === 0 && !s.solved && s.attempts === 0) });
@@ -72,4 +77,44 @@ const reset = make();
 tap(reset, reset.level.mixers[0], 0);
 reset.level.setSeed(42);
 T.check('새 경기 조합 초기화', { ok: reset.level.seed === 42 && reset.level.mixers.every((s) => s.mask === 0 && !s.solved) });
+
+// ── 매 판 다른 작품 (시드) ──
+const seenCombos = new Set();
+for (let seed = 1; seed <= 24; seed++) {
+  const w = new PhysicsWorld();
+  const level = buildColorStudio(new THREE.Scene(), w, { seed });
+  const masks = level.mixers.map((m) => m.targetMask);
+  seenCombos.add(masks.join());
+  T.check(`시드 ${seed}: 물감 두 작업실의 목표가 서로 다른 두 색 섞기`, { ok: [3, 5, 6].includes(masks[0]) && [3, 5, 6].includes(masks[1]) && masks[0] !== masks[1], why: masks.join() });
+  T.check(`시드 ${seed}: 빛 첫 무대는 두 색, 마지막은 흰색`, { ok: [3, 5, 6].includes(masks[2]) && masks[3] === 7, why: masks.join() });
+  T.check(`시드 ${seed}: 제목·구간 이름이 목표 색과 일치`, { ok: level.mixers.every((m) => m.heading.text.includes(m.target.name) && level.sectionAt(m.z - 1).includes(m.target.name)), why: level.mixers.map((m) => `${m.heading.text}/${level.sectionAt(m.z - 1)}`).join(' | ') });
+  // 목표 색은 실제로 만들 수 있고(해당 조합 제출 → 완성) 다른 조합은 막힌다
+  for (const [i, state] of level.mixers.entries()) {
+    const wrongMask = (state.targetMask + 1) % 8;
+    const stateCheck = buildColorStudio(new THREE.Scene(), new PhysicsWorld(), { seed });
+    const st = stateCheck.mixers[i];
+    for (let bit = 0; bit < 3; bit++) if (wrongMask & (1 << bit)) tap({ level: stateCheck }, st, bit);
+    if (mixedColor(st.mode, wrongMask).hex !== st.target.hex) {
+      tap({ level: stateCheck }, st, 4);
+      T.check(`시드 ${seed} 작업실 ${i + 1}: 다른 조합은 완성되지 않음`, { ok: !st.solved, why: `${wrongMask}` });
+    }
+    tap({ level: stateCheck }, st, 3);
+    for (let bit = 0; bit < 3; bit++) if (st.targetMask & (1 << bit)) tap({ level: stateCheck }, st, bit);
+    tap({ level: stateCheck }, st, 4);
+    T.check(`시드 ${seed} 작업실 ${i + 1}: 목표 조합으로 완성(${st.target.name})`, { ok: st.solved, why: `${st.mask}` });
+  }
+}
+T.check('시드에 따라 다른 작품 조합이 나옴', { ok: seenCombos.size >= 6, why: `${seenCombos.size}가지` });
+{
+  const a = buildColorStudio(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  const same = buildColorStudio(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  T.check('같은 시드는 같은 작품(모든 화면이 같음)', { ok: a.mixers.map((m) => m.targetMask).join() === same.mixers.map((m) => m.targetMask).join() });
+  const before = a.mixers.map((m) => m.targetMask).join();
+  tap({ level: a }, a.mixers[0], 0);
+  a.resetProgress();
+  T.check('처음부터는 목표를 유지하고 조합만 비움', { ok: a.mixers.map((m) => m.targetMask).join() === before && a.mixers[0].mask === 0 });
+  let changed = false;
+  for (let s = 6; s < 40 && !changed; s++) { a.setSeed(s); changed = a.mixers.map((m) => m.targetMask).join() !== before; }
+  T.check('새 경기(시드)에서 목표가 바뀌고 조합·완성 초기화', { ok: changed && a.mixers.every((m) => m.mask === 0 && !m.solved) });
+}
 T.report();

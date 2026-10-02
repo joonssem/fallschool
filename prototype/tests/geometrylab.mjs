@@ -1,10 +1,17 @@
 import { THREE, PhysicsWorld, run, tally } from './harness.mjs';
-import { buildGeometryLab, NET_OPTIONS } from '../src/levels/geometrylab.js';
+import { courseRoute, runRetry } from './course-helpers.mjs';
+import { buildGeometryLab, NET_OPTIONS, NET_POOL, netChoices, symmetryProblem } from '../src/levels/geometrylab.js';
 import { analyzeCubeNet, reflectPoint } from '../src/levels/geometry-math.js';
 const T = tally('도형 건축 연구소');
+// 기존 시험은 처음 설계한 문제(고정 전개도·대칭 보기)를 기준으로 쓰였으므로 그 문제로 고정해서 만든다 (매 판 달라지는 문제는 아래에서 따로 시험)
 const make = (seed = 1) => {
   const world = new PhysicsWorld();
-  return { world, level: buildGeometryLab(new THREE.Scene(), world, { seed }) };
+  const level = buildGeometryLab(new THREE.Scene(), world, { seed });
+  level.builders[0].setNets(NET_OPTIONS[0]);
+  level.builders[1].setNets(NET_OPTIONS[1]);
+  level.builders[2].setProblem({ source: [-2, 1], options: [[1, 1], [2, -1], [2, 1]] });
+  level.builders[3].setProblem({ source: [-1, -2], options: [[-1, 2], [1, 2], [-1, 1]] });
+  return { world, level };
 };
 function tap(m, state, index) {
   const p = state.pads[index];
@@ -129,10 +136,78 @@ for (const seed of [1, 5, 99]) {
     T.check(`걸어서 선택·완성·통과 ${seed}/${index}`, run(path, [0, 1, state.z + 17], [[choicePad.x, choicePad.z], [0, state.z + 12], [submit.x, submit.z], [0, state.z + 2], [0, state.z - 8]]));
     T.check(`완성 상태 ${seed}/${index}`, { ok: state.solved });
   }
-  T.check(`전체 경로 ${seed}`, run(path, [0, 0, 5], [[0, -13], [0, -21], [0, -34], [0, -47], [0, -67], [0, -80], [0, -100], [0, -113], [0, -133], [0, -146], [0, -157]]));
+  T.check(`전체 경로 ${seed}`, runRetry(path, [0, 0, 5], courseRoute(path.level)));
   T.check(`완주 ${seed}`, { ok: path.level.finished });
   path.level.resetProgress();
   T.check(`처음부터 초기화 ${seed}`, { ok: !path.level.finished && path.level.builders.every((b) => !b.solved && b.selected === -1 && b.fold === 0 && b.bridge.every((mesh) => !mesh.userData.collider.enabled)) });
+}
+
+// ── 매 판 다른 문제 (시드) ──
+T.check('전개도 후보: 정육면체가 되는 것은 모두 유효', { ok: NET_POOL.valid.every((c) => analyzeCubeNet(c).valid) });
+T.check('전개도 후보: 되지 않는 것은 모두 무효', { ok: NET_POOL.invalid.every((c) => !analyzeCubeNet(c).valid) });
+const poolKeys = [...NET_POOL.valid, ...NET_POOL.invalid].map((c) => canonical(c));
+T.check('전개도 후보는 서로 다른 모양(회전·반사 포함)', { ok: new Set(poolKeys).size === poolKeys.length, why: `${new Set(poolKeys).size}/${poolKeys.length}` });
+const shapeSeen = new Set();
+const symSeen = new Set();
+for (let seed = 1; seed <= 40; seed++) {
+  const choices = netChoices(seed);
+  T.check(`시드 ${seed}: 전개도 방마다 정답 1개·오답 2개`, { ok: choices.every((o) => o.length === 3 && o.filter((c) => analyzeCubeNet(c).valid).length === 1) });
+  T.check(`시드 ${seed}: 두 전개도 방이 서로 다른 전개도`, { ok: new Set(choices.flat().map((c) => canonical(c))).size === 6 });
+  shapeSeen.add(choices.map((o) => o.map((c) => canonical(c)).join('|')).join('||'));
+  for (const [salt, axis] of [[20, { normal: [1, 0] }], [21, { normal: [0, 1] }]]) {
+    const { source, options } = symmetryProblem(seed, salt, axis);
+    const target = reflectPoint(source, axis);
+    const inGrid = ([x, y]) => Math.abs(x) <= 3 && Math.abs(y) <= 2;
+    const onAxis = axis.normal[0] ? source[0] === 0 : source[1] === 0;
+    T.check(`시드 ${seed} 대칭 ${salt}: 정답은 정확히 하나, 보기 셋은 서로 다르고 격자 안`, {
+      ok: !onAxis && inGrid(source) && options.length === 3 && options.every(inGrid)
+        && options.filter((o) => o[0] === target[0] && o[1] === target[1]).length === 1
+        && new Set(options.map((o) => o.join())).size === 3 && options.every((o) => o.join() !== source.join()),
+      why: JSON.stringify({ source, options, target }),
+    });
+    symSeen.add(JSON.stringify([source, options]));
+  }
+  // 실제 방: 만들어진 방에서 정답 선택은 완성, 오답은 잠김
+  const w = new PhysicsWorld();
+  const lv = buildGeometryLab(new THREE.Scene(), w, { seed });
+  const [n1, n2, s1, s2] = lv.builders;
+  T.check(`시드 ${seed}: 방 보기가 netChoices와 일치`, { ok: JSON.stringify(n1.options) === JSON.stringify(choices[0]) && JSON.stringify(n2.options) === JSON.stringify(choices[1]) });
+  for (const st of [s1, s2]) {
+    const wrongIdx = st.options.findIndex((p) => p.join() !== st.target.join());
+    const rightIdx = st.options.findIndex((p) => p.join() === st.target.join());
+    const mm = { level: lv };
+    tap(mm, st, wrongIdx); tap(mm, st, 4);
+    T.check(`시드 ${seed}: 대칭 오답은 잠김`, { ok: !st.solved });
+    tap(mm, st, rightIdx); tap(mm, st, 4);
+    T.check(`시드 ${seed}: 대칭 정답은 완성`, { ok: st.solved });
+  }
+  for (const st of [n1, n2]) {
+    const mm = { level: lv };
+    const validIdx = st.models.findIndex((md) => md.analysis.valid);
+    const wrongIdx = st.models.findIndex((md) => !md.analysis.valid);
+    tap(mm, st, wrongIdx); tap(mm, st, 4); lv.update(2, 2, null);
+    T.check(`시드 ${seed}: 되지 않는 전개도는 길 없음`, { ok: !st.solved });
+    tap(mm, st, validIdx); tap(mm, st, 4); lv.update(4, 2, null);
+    T.check(`시드 ${seed}: 되는 전개도는 접어서 길 완성`, { ok: st.solved });
+  }
+}
+T.check('시드에 따라 다른 전개도 조합이 나옴', { ok: shapeSeen.size >= 20, why: `${shapeSeen.size}가지` });
+T.check('시드에 따라 다른 대칭 문제가 나옴', { ok: symSeen.size >= 20, why: `${symSeen.size}가지` });
+{
+  const a = buildGeometryLab(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  const same = buildGeometryLab(new THREE.Scene(), new PhysicsWorld(), { seed: 5 });
+  const sig = (l) => JSON.stringify([l.builders[0].options, l.builders[1].options, l.builders[2].options, l.builders[2].source, l.builders[3].options, l.builders[3].source]);
+  T.check('같은 시드는 같은 문제(모든 화면이 같음)', { ok: sig(a) === sig(same) });
+  const before = sig(a);
+  tap({ level: a }, a.builders[2], 0);
+  a.resetProgress();
+  T.check('처음부터는 문제를 유지하고 선택·완성만 초기화', { ok: sig(a) === before && a.builders.every((b) => b.selected === -1 && !b.solved) });
+  const modelsBefore = a.builders[0].models.length;
+  const groupsBefore = a.root.children.length;
+  for (let s = 6; s < 30; s++) a.setSeed(s);
+  T.check('새 경기마다 모델을 다시 만들어도 장면이 불어나지 않음', { ok: a.builders[0].models.length === modelsBefore && a.root.children.length === groupsBefore, why: `${a.root.children.length} vs ${groupsBefore}` });
+  a.setSeed(77);
+  T.check('새 경기에서 문제가 바뀜', { ok: sig(a) !== before });
 }
 m.level.setSeed(42);
 T.check('새 경기 초기화', { ok: m.level.seed === 42 && m.level.builders.every((b) => !b.solved && b.selected === -1) });

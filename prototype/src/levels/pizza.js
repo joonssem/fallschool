@@ -2,19 +2,33 @@
 // 주문은 학생별 상태. 친구의 선택 때문에 내 문이 닫히거나 마지막 학생이 막히지 않는다.
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, sectionFinder } from './kit.js';
+import { connector, ROOM_STEP } from './course.js';
+import { dynamicSign, rngFor, pick } from './variants.js';
+
+// 주문 방 z와 방 사이 연결 코스 종류 (방 사이는 달리기·점프·타이밍 구간)
+const ROOMS = [-34, -34 - ROOM_STEP, -34 - 2 * ROOM_STEP];
+const KINDS = ['bar', 'movers'];
+
+// 매 판 다른 주문: 주문마다 후보(8분의 몇 판)에서 시드로 고른다. 모두 1/4 단위라 조각(1/2·1/4·1/8)으로 만들 수 있다.
+const TARGET_POOLS = [[2, 4], [4, 6], [6, 8]];
+const LABELS = { 2: '4분의 1 (1/4)', 4: '반 판 (1/2)', 6: '4분의 3판 (3/4)', 8: '한 판 (1)' };
+export const orderLabel = (target) => LABELS[target];
 
 export function buildPizza(parent, world, { seed = 1 } = {}) {
   const level = createLevel(parent, world, {
     sectionAt: sectionFinder([
       { name: '분수 피자 공장', zMax: Infinity },
-      { name: '반 판 주문 · 1/2', zMax: -15 },
-      { name: '4분의 3 주문 · 3/4', zMax: -48 },
-      { name: '한 판 주문 · 1', zMax: -81 },
-      { name: '포장 출구', zMax: -114 },
+      { name: '주문 1', zMax: -15 },
+      { name: '연결 코스', zMax: ROOMS[0] - 12 },
+      { name: '주문 2', zMax: ROOMS[1] + 19 },
+      { name: '연결 코스', zMax: ROOMS[1] - 12 },
+      { name: '주문 3', zMax: ROOMS[2] + 19 },
+      { name: '포장 출구', zMax: ROOMS[2] - 14 },
     ]),
     sky: { background: 0xffe6b8, fog: [0xffe6b8, 70, 180], hemi: 1.4 },
   });
-  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = makeKit(level);
+  const kit = makeKit(level);
+  const { platform, block, sign, startCheckpoint, checkpoint, finishPad } = kit;
   const colors = [0xf4a261, 0xe9c46a, 0x91c788];
   level.orders = [];
   platform(0, 0, 2, 20, 20, 0xf4a261);
@@ -25,13 +39,14 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
   platform(0, 0.5, -13, 10, 6, 0xe9c46a);
   platform(0, 1, -21, 10, 6, 0xf4a261);
 
-  function orderStation(z, target, units, title, color) {
+  function orderStation(index, z, units, color) {
+    const title = `주문 ${index + 1}`;
     const deck = platform(0, 1, z + 8, 24, 24, color);
     const cp = checkpoint(deck, new THREE.Vector3(0, 1, z + 17), title);
     cp.noHelp = true; // 주문의 틀린 조합은 낙하로 처리하지 않는다.
-    const order = { target, units, total: 0, pieces: [], solved: false, pads: [], z };
+    const order = { target: 0, units, total: 0, pieces: [], solved: false, pads: [], z, index };
     level.orders.push(order);
-    sign(title, 0, 8.5, z + 1, { width: 6, color: '#a44a19' });
+    const heading = dynamicSign(level.root, { x: 0, y: 8.5, z: z + 1, width: 6, color: '#a44a19' });
     sign('조각 담기', -8.5, 4, z + 6, { width: 3.5, color: '#a44a19', lines: ['한 번 밟으면 한 조각', '내려왔다 다시 밟아요'], rotY: 0.35 });
 
     // 같은 반지름, 같은 8등분: 주문량과 내가 모은 양을 나란히 비교.
@@ -61,14 +76,14 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
     status.material.map = texture;
     function paint() {
       disks.forEach((disk, di) => disk.forEach((slice, i) => {
-        slice.material.color.setHex(i < (di === 0 ? target : order.total) ? 0xffb347 : 0xddd3c0);
+        slice.material.color.setHex(i < (di === 0 ? order.target : order.total) ? 0xffb347 : 0xddd3c0);
       }));
       ctx.clearRect(0, 0, 512, 128);
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 512, 128);
-      ctx.fillStyle = order.total > target ? '#b03030' : '#634024';
+      ctx.fillStyle = order.total > order.target ? '#b03030' : '#634024';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = 'bold 46px "Malgun Gothic", sans-serif';
-      ctx.fillText(`${order.total}/8${order.solved ? ' · 완성!' : order.total > target ? ' · 주문보다 많아요' : ''}`, 256, 64);
+      ctx.fillText(`${order.total}/8${order.solved ? ' · 완성!' : order.total > order.target ? ' · 주문보다 많아요' : ''}`, 256, 64);
       texture.needsUpdate = true;
     }
     const door = block(0, 7, z - 3, 8, 6, 0.8, 0xb5651d, { dynamic: true });
@@ -98,10 +113,10 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
           else if (pad.unit === -1) order.total -= order.pieces.pop() || 0;
           else if (order.total + pad.unit <= 16) { order.pieces.push(pad.unit); order.total += pad.unit; }
           else level.onMessage?.('한 판보다 많이 담았어요. 조각 취소나 처음부터를 사용해요.', false);
-          if (order.total === target) {
+          if (order.total === order.target) {
             order.solved = true;
             level.onMessage?.('주문 완성! 같은 양을 다른 조각으로도 만들 수 있어요.', true);
-          } else if (order.total > target) level.onMessage?.('주문보다 많아요. 마지막 조각을 취소해 보세요.', false);
+          } else if (order.total > order.target) level.onMessage?.('주문보다 많아요. 마지막 조각을 취소해 보세요.', false);
           paint();
         }
         pad.occupied = occupied;
@@ -110,6 +125,13 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
       door.position.y = 4 + lift * 7;
       door.userData.collider.enabled = lift < 0.95;
     } });
+    // 이 판의 주문량: 제목·구간 이름·주문량 그림이 함께 바뀐다
+    order.setTarget = (t) => {
+      order.target = t;
+      heading.set([`${title} · ${LABELS[t]}`]);
+      order.reset();
+    };
+    order.heading = heading;
     order.reset = () => {
       order.total = 0; order.pieces = []; order.solved = false; lift = 0;
       door.position.y = 4; door.userData.collider.enabled = true;
@@ -118,18 +140,30 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
     paint();
   }
 
-  orderStation(-34, 4, [4, 2, 1], '주문 1 · 반 판 (1/2)', 0xf6d28b);
-  // 첫째 문 출구에서 다음 주문대로: 쉬운 점프 하나.
-  platform(0, 1, -47, 8, 6, 0xe9c46a);
-  orderStation(-67, 6, [4, 2, 1], '주문 2 · 4분의 3판 (3/4)', 0xf3c596);
-  platform(0, 1, -80, 8, 6, 0xe9c46a);
-  orderStation(-100, 8, [2, 1], '주문 3 · 한 판 (1)', 0xf6d28b);
-  platform(0, 1, -113, 8, 6, 0xe9c46a);
-  const goal = platform(0, 1, -124, 18, 14, 0x91c788);
-  sign('포장 완료!', 0, 5, -122, { width: 7, lines: ['포장 완료!', '반 판을 만드는 다른 방법을 말해 볼까요?'] });
-  finishPad(goal, -123);
+  const connectors = [];
+  orderStation(0, ROOMS[0], [4, 2, 1], 0xf6d28b);
+  connectors.push(connector(level, kit, { zStart: ROOMS[0] - 12, kind: KINDS[0], color: 0xe9c46a, accent: 0xc8553d, name: '연결 코스 1' }));
+  orderStation(1, ROOMS[1], [4, 2, 1], 0xf3c596);
+  connectors.push(connector(level, kit, { zStart: ROOMS[1] - 12, kind: KINDS[1], color: 0xe9c46a, accent: 0xc8553d, name: '연결 코스 2' }));
+  orderStation(2, ROOMS[2], [2, 1], 0xf6d28b);
+  const zl = ROOMS[2];
+  platform(0, 1, zl - 13, 8, 6, 0xe9c46a);
+  const goal = platform(0, 1, zl - 24, 18, 14, 0x91c788);
+  sign('포장 완료!', 0, 5, zl - 22, { width: 7, lines: ['포장 완료!', '반 판을 만드는 다른 방법을 말해 볼까요?'] });
+  finishPad(goal, zl - 23);
+  level.course = { rooms: ROOMS, connectors, tail: [[0, zl - 13], [0, zl - 24]], goalZ: zl - 23 }; // 시험에서 경로를 만들 때 쓴다
 
-  level.setSeed = (s) => { level.seed = s; level.orders.forEach((o) => o.reset()); };
+  level.setSeed = (s) => {
+    level.seed = s;
+    level.orders.forEach((o, k) => o.setTarget(pick(rngFor(s, k), TARGET_POOLS[k])));
+  };
+  // 구간 이름(HUD)에 이 판의 주문량을 붙인다
+  const baseSection = level.sectionAt;
+  level.sectionAt = (z) => {
+    const name = baseSection(z);
+    const m = /^주문 (\d)$/.exec(name);
+    return m ? `${name} · ${LABELS[level.orders[+m[1] - 1].target]}` : name;
+  };
   finalizeLevel(level);
   const resetProgress = level.resetProgress;
   level.resetProgress = () => { resetProgress(); level.orders.forEach((o) => o.reset()); };
