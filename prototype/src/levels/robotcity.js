@@ -64,14 +64,15 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     checkpoint(deck, new THREE.Vector3(0, 1, z + 17), config.name);
     sign(config.name, 0, 13, z + 2, { width: 8 });
     const robotStart = [0, z + 1];
-    const target = config.target;
+    // ROBOT_STOPS의 start·target은 같은 좌표계라 차이(상대 이동)만 쓴다. 로봇은 정류장 안 robotStart에서 출발한다.
+    const target = [robotStart[0] + config.target[0] - config.start[0], robotStart[1] + config.target[1] - config.start[1]];
     // 짧은 도로망은 타일 표식만 보여 주고, 캐릭터 점프는 필요 없다.
     for (let i = -1; i <= 1; i++) {
       platform(i * 4, 1.05, z - 5, 3.6, 24, 0x8a9aa5, { thick: 0.18 });
       for (let j = 0; j < 4; j++) block(i * 4, 1.16, z - 1 - j * 4, 0.12, 0.025, 1.4, 0xf7f2d0);
     }
     const startPad = platform(-8, 1.15, z + 1, 3, 3, 0x75c9a5); sign('출발', -8, 3, z - 0.8, { width: 2.8 });
-    const targetBuilding = block(target[0], 4.8, target[1] + z + 1, 4, 7.6, 4, 0xf2a65a, { castShadow: true });
+    const targetBuilding = block(target[0], 4.8, target[1], 4, 7.6, 4, 0xf2a65a, { castShadow: true });
     const door = block(0, 5, z - 10.5, 12, 8, 0.8, 0x566b7b, { dynamic: true });
     const roadBridge = platform(0, 1, z - 13, 12, 5, 0xa7c7d5);
     const robot = makeRobot(robotStart[0], robotStart[1]);
@@ -92,7 +93,7 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     const ctx = msgCanvas.getContext('2d'); const tex = new THREE.CanvasTexture(msgCanvas); tex.colorSpace = THREE.SRGBColorSpace;
     message.material.map.dispose(); message.material.map = tex;
     const showMessage = (text) => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 768, 128); ctx.fillStyle = '#263238'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 384, 64); tex.needsUpdate = true; };
-    const state = { config, index, robot, targetBuilding, door, roadBridge, grid, commands: [], path: [], deliveries: 0, solved: false, running: false, runAt: 0, startPad, runPad, resetPad, status: showMessage, message: '명령을 골라요' };
+    const state = { config, index, robot, targetBuilding, door, roadBridge, grid, commands: [], path: [], deliveries: 0, solved: false, running: false, runAt: 0, startPad, runPad, resetPad, doorLift: 0, status: showMessage, message: '명령을 골라요' };
     level.deliveries.push(state);
     const pathPoints = [];
     for (let i = 0; i <= config.required.length; i++) {
@@ -101,7 +102,7 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     }
     state.markers = pathPoints;
     state.reset = () => {
-      state.commands = []; state.path = []; state.solved = false; state.running = false; state.runAt = 0;
+      state.commands = []; state.path = []; state.solved = false; state.running = false; state.runAt = 0; state.doorLift = 0;
       state.message = '명령을 골라요'; showMessage(state.message); robot.position.set(robotStart[0], 0, robotStart[1]); robot.rotation.y = 0;
       door.position.y = 1; door.userData.collider.enabled = true; roadBridge.material.color.setHex(0xa7c7d5);
       pathPoints.forEach((p) => { p.visible = false; }); grid.forEach((g) => { g.mesh.material.color.setHex(0xb9c4d0); g.occupied = false; });
@@ -109,7 +110,7 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     state.run = () => {
       if (state.running || state.solved || state.commands.length === 0) return;
       const result = runRobotCommands(robotStart, config.dirs[0], state.commands);
-      state.path = result.path.map(([x, zz]) => [x, zz + z + 1]);
+      state.path = result.path.map(([x, zz]) => [x, zz]);
       state.path.forEach(([x, zz], i) => { if (pathPoints[i]) { pathPoints[i].position.set(x, 1.3, zz); pathPoints[i].visible = true; } });
       state.finalDirection = result.direction;
       state.targetReached = same(result.position, target);
@@ -140,6 +141,10 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     };
     movers.push({ root: null, update(t, dt, player) {
       state.update(t, dt);
+      // 배송에 성공하면 문이 올라가 길이 열린다 (이전에는 문이 열리지 않아 첫 정류장에서 막혔다)
+      state.doorLift = Math.min(1, Math.max(0, state.doorLift + (state.solved ? dt * 1.8 : 0)));
+      door.position.y = 1 + state.doorLift * 8;
+      door.userData.collider.enabled = state.doorLift < 0.92;
       if (!player || state.running || state.solved) return;
       const p = player.pos;
       for (const g of grid) {
