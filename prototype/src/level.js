@@ -35,8 +35,33 @@ export const SECTIONS = [
   { name: '시소 다리', zMax: -175 },
 ];
 
-export function buildLevel(parent, world, { seed = Date.now() } = {}) {
+// 난이도 단계 (맵 목록의 변형 맵 id로 고른다: lab=기본, labeasy=쉬움, labhard=어려움. 방 설정(database.rules)은 바꾸지 않는다).
+// 쉬움 = 2026-10-02 난이도 상향 이전의 1부 값 + 더 넓고 느린 2부, 기본 = 상향 후 값, 어려움 = 숙련 학생용. 값은 코드 한 곳(여기)에서 조정한다.
+export const DIFFICULTY = {
+  easy: {
+    label: '쉬움', sweep: [1.2, -0.9], mover: 0.8, piston: 1.3, fan: 3.6,
+    beam: [2.8, 2.4, 2.0, 1.6], gaps: [2.2, 2.6, 3.0, 3.4, 3.8],
+    blink: { P: 4.4, vis: 3.9, warn: 1.0 }, belts: [2.4, 2.6, 3.1], hammer: 0.8,
+    wind: { power: 6.5, calm: 1.8, ramp: 0.6, strong: 2.2, fade: 0.5 },
+  },
+  normal: {
+    label: '기본', sweep: [1.5, -1.15], mover: 1.0, piston: 1.6, fan: 4.2,
+    beam: [2.4, 1.8, 1.4, 1.0], gaps: [2.4, 3.0, 3.6, 4.1, 4.6],
+    blink: { P: 4.4, vis: 3.6, warn: 0.9 }, belts: [3.2, 3.4, 4.2], hammer: 1.0,
+    wind: { power: 9, calm: 1.4, ramp: 0.6, strong: 2.6, fade: 0.5 },
+  },
+  hard: {
+    label: '어려움', sweep: [1.9, -1.5], mover: 1.3, piston: 2.0, fan: 4.8,
+    beam: [2.0, 1.5, 1.2, 0.9], gaps: [2.6, 3.3, 3.9, 4.4, 4.7],
+    blink: { P: 4.4, vis: 3.2, warn: 0.8 }, belts: [4.0, 4.2, 5.2], hammer: 1.25,
+    wind: { power: 10, calm: 1.2, ramp: 0.6, strong: 3.0, fade: 0.5 },
+  },
+};
+
+export function buildLevel(parent, world, { seed = Date.now(), difficulty = 'normal' } = {}) {
+  const D = DIFFICULTY[difficulty] || DIFFICULTY.normal;
   const level = createLevel(parent, world, { sectionAt: sectionFinder(SECTIONS), fanZones: [] });
+  level.difficulty = difficulty in DIFFICULTY ? difficulty : 'normal';
   const scene = level.root;
   const { movers, checkpoints } = level;
   const { mat, block, platform, ramp, sign, startCheckpoint, checkpoint, finishPad, challengeStar, seesaw: kitSeesaw } = makeKit(level);
@@ -194,8 +219,8 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
       },
     });
   }
-  sweeper(-89, 1.5, 5.3, 2.5, COLORS.bar); // 2026-10-02 난이도 상향: 회전 속도 1.2→1.5, 0.9→1.15
-  sweeper(-101, -1.15, 6.95, 3.2, 0x8338ec);
+  sweeper(-89, D.sweep[0], 5.3, 2.5, COLORS.bar); // 2026-10-02 난이도 상향: 회전 속도 1.2→1.5, 0.9→1.15 (단계는 DIFFICULTY)
+  sweeper(-101, D.sweep[1], 6.95, 3.2, 0x8338ec);
 
   // ─── 체크포인트 3 + 움직이는 발판 ───────────────────────
   const cp3 = platform(0, 5, -112, 12, 8, COLORS.checkpoint);
@@ -207,7 +232,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     movers.push({
       root: m,
       update(t) {
-        m.position.x = Math.sin(t * 1.0 + phase) * 3.5; // 속도 0.8→1.0 (난이도 상향)
+        m.position.x = Math.sin(t * D.mover + phase) * 3.5; // 속도 0.8→1.0 (난이도 상향)
       },
     });
   }
@@ -217,7 +242,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     movers.push({
       root: m,
       update(t) {
-        m.position.y = baseY + Math.sin(t * 1.6 - i * 1.1) * 1.2; // 속도 1.3→1.6 (난이도 상향)
+        m.position.y = baseY + Math.sin(t * D.piston - i * 1.1) * 1.2; // 속도 1.3→1.6 (난이도 상향)
       },
     });
   });
@@ -291,7 +316,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
       }
     },
   });
-  const WIND_SPEED = 4.2; // 3.6→4.2 (난이도 상향)
+  const WIND_SPEED = D.fan; // 3.6→4.2 (난이도 상향)
   level.windAt = (pos, out) => {
     for (const zone of level.fanZones) {
       if (zone.strength <= 0) continue;
@@ -358,7 +383,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // 1) 좁은 평균대: 폭이 줄어드는 외길
   extStart('좁은 평균대 ★');
   extSign('좁은 평균대: 곧게 걸어라');
-  for (const [w, len] of [[2.4, 6], [1.8, 6], [1.4, 6], [1.0, 6]]) {
+  for (const [w, len] of D.beam.map((bw) => [bw, 6])) {
     platform(0, 5, zc - len / 2, w, len, COLORS.bridge);
     zc -= len;
   }
@@ -367,7 +392,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // 2) 징검다리: 틈이 점점 벌어진다 (마지막은 달려서 뛰어야 한다)
   extStart('징검다리 ★★');
   extSign('징검다리: 틈이 점점 벌어진다');
-  const GAPS = [2.4, 3.0, 3.6, 4.1, 4.6]; // 마지막 틈은 발판 가장자리 가까이에서 뛰어야 닿는다
+  const GAPS = D.gaps; // 마지막 틈은 발판 가장자리 가까이에서 뛰어야 닿는다
   const STONE_X = [0, 1, -1, 1, 0];
   platform(0, 5, zc - 1.7, 3.4, 3.4, COLORS.step);
   zc -= 3.4;
@@ -383,7 +408,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // 3) 사라지는 발판: 깜빡이면 곧 사라진다
   extStart('사라지는 발판 ★★');
   extSign('사라지는 발판: 깜빡이면 곧 사라져요');
-  const BLINK = { P: 4.4, vis: 3.6, warn: 0.9 };
+  const BLINK = D.blink;
   const blinkTiles = [];
   for (let r = 0; r < 7; r++) for (let c = 0; c < 3; c++) {
     const mesh = block((c - 1) * 3.5, 5, zc - 1.75 - r * 3.5, 3.1, 0.6, 3.1, 0, {
@@ -412,7 +437,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // 4) 컨베이어: 바닥이 밀어 준다 (점프하면 벗어난다)
   extStart('컨베이어 ★★');
   extSign('컨베이어: 화살표 방향으로 바닥이 움직여요');
-  const BELTS = [{ dx: 0, dz: 1, speed: 3.2 }, { dx: 1, dz: 0, speed: 3.4 }, { dx: 0, dz: 1, speed: 4.2 }];
+  const BELTS = [{ dx: 0, dz: 1, speed: D.belts[0] }, { dx: 1, dz: 0, speed: D.belts[1] }, { dx: 0, dz: 1, speed: D.belts[2] }];
   const beltZones = [];
   BELTS.forEach((b, i) => {
     const top = zc;
@@ -484,7 +509,8 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   extSign('해머 복도: 때를 보고 지나가라');
   platform(0, 5, zc - 13, 8, 26, COLORS.bridge);
   for (const sx of [-1, 1]) block(sx * 4.6, 10, zc - 13, 1.2, 5, 26, COLORS.pillar, { castShadow: true });
-  [[4.5, 1.4, 1.5, 0], [10, 2.5, 1.9, 1.7], [15.5, 1.4, 1.7, 3.2], [21, 2.5, 1.4, 0.6]].forEach(([hz, h, omega, phase]) => {
+  [[4.5, 1.4, 1.5, 0], [10, 2.5, 1.9, 1.7], [15.5, 1.4, 1.7, 3.2], [21, 2.5, 1.4, 0.6]].forEach(([hz, h, omega0, phase]) => {
+    const omega = omega0 * D.hammer;
     const hammer = block(0, 5 + h, zc - hz, 3.2, h, 1.4, COLORS.bar, { kind: 'bumper', dynamic: true, castShadow: true });
     movers.push({ root: hammer, update(t) { hammer.position.x = Math.sin(t * omega + phase) * 2.5; } });
   });
@@ -494,7 +520,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   // 8) 맞바람: 바람이 시작 쪽으로 불어 온다 (벽 뒤에서 쉬었다 달린다)
   extStart('맞바람 ★★★');
   extSign('맞바람: 벽 뒤에서 쉬었다 달려라');
-  const HZ = { zMin: zc - 28, zMax: zc, power: 9 };
+  const HZ = { zMin: zc - 28, zMax: zc, power: D.wind.power };
   platform(0, 5, zc - 14, 9, 28, COLORS.bridge);
   const shelters = [6, 13, 20].map((sz, i) => {
     const x = i % 2 ? 1.8 : -1.8;
@@ -507,7 +533,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     scene.add(m);
     streaks.push({ m, x: ((i * 37) % 9) - 4.5, y: 5.6 + (i % 4) * 0.7, p: i / 22 });
   }
-  level.headwindStrength = (t) => gust(t, 1.4, 0.6, 2.6, 0.5);
+  level.headwindStrength = (t) => gust(t, D.wind.calm, D.wind.ramp, D.wind.strong, D.wind.fade);
   level.shelters = shelters;
   level.headwindZone = HZ;
   movers.push({ root: null, update(t, dt) {

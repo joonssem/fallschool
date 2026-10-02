@@ -1,9 +1,14 @@
 // 점프 연구소 시험장(2부 시험 구간): 구간별 통과 가능성(규칙·이동 검증). 시험 통과는 재미나 난이도 적절함의 증거가 아니다.
 // 움직이는 장애물 구간은 봇이 출발 시각을 바꿔 가며 지나간다. 통과 비율은 출력으로 남기고 최소 기준만 검사한다.
 import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
-import { buildLevel } from '../src/level.js';
-const T = tally('점프 연구소 시험장(시험 구간)');
-const build = (seed = 1) => { const world = new PhysicsWorld(); return { world, level: buildLevel(new THREE.Scene(), world, { seed }) }; };
+import { buildLevel, DIFFICULTY } from '../src/level.js';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+// 난이도 단계(쉬움·기본·어려움)마다 같은 시험을 한 번씩 돈다. 인자 없이 실행하면 기본 단계를 돌고 이어서 나머지 단계를 자식 프로세스로 돈다.
+const DIFF = process.env.LAB_DIFFICULTY || 'normal';
+const G = DIFFICULTY[DIFF].gaps;
+const T = tally(`점프 연구소 시험장(시험 구간, ${DIFFICULTY[DIFF].label})`);
+const build = (seed = 1) => { const world = new PhysicsWorld(); return { world, level: buildLevel(new THREE.Scene(), world, { seed, difficulty: DIFF }) }; };
 const rate = {};
 function tryMany(name, startFn, targets, t0s, opts = {}) {
   let ok = 0;
@@ -30,7 +35,8 @@ const z5 = Z('시험장 입구'), z6 = Z('평균대 뒤'), z7 = Z('징검다리 
 T.check('좁은 평균대', run(build(), [0, 5, z5], [[0, z6 + 3]], { nojump: true, maxT: 20 }));
 // 2) 징검다리 (중심 z는 평균대 뒤 체크포인트 끝에서 계산)
 const s0 = z6 - 4.5 - 1.7;
-const STONES = [[0, s0], [0, s0 - 5.8], [1, s0 - 12.2], [-1, s0 - 19.2], [1, s0 - 26.7], [0, s0 - 34.7], [0, z7]];
+const STONES = [[0, s0]];
+{ let cz = s0 - 1.7; const xs = [0, 1, -1, 1, 0]; G.forEach((g, i) => { cz -= g + 1.7; STONES.push([xs[i], cz]); cz -= 1.7; }); STONES.push([0, z7]); }
 T.check('징검다리', run(build(), [0, 5, z6], STONES, { maxT: 40 }));
 // 3) 사라지는 발판: 어느 시각에도 각 줄에 밟을 수 있는 발판이 있고(경고 중 포함), 안정된 발판도 있다
 {
@@ -101,7 +107,7 @@ function headwindRun(t0) {
   const m = build();
   const p = new Player(new THREE.Scene());
   p.respawn(new THREE.Vector3(0, 5, z12), 0);
-  const calmUntil = (t) => m.level.headwindStrength(t) === 0 && m.level.headwindStrength(t + 1.3) === 0;
+  const calmUntil = (t) => m.level.headwindStrength(t) === 0 && m.level.headwindStrength(t + Math.min(1.3, DIFFICULTY[DIFF].wind.calm - 0.1)) === 0;
   const plan = [
     { to: [-1.8, z12 - 8.5], wait: false }, { to: [2.5, z12 - 10.5], wait: true }, { to: [1.8, z12 - 15.5], wait: false },
     { to: [-1.8, z12 - 17.5], wait: true }, { to: [-1.8, z12 - 22.5], wait: false }, { to: [2.5, z12 - 24.5], wait: true },
@@ -142,9 +148,9 @@ function headwindRun(t0) {
   const o = new THREE.Vector3();
   level.update(0, S, null);
   o.set(0, 0, 0); level.windAt(new THREE.Vector3(0, 5.05, z8 - 5), o);
-  T.check('첫 컨베이어는 시작 쪽(+z)으로 민다', { ok: o.z > 3 && o.x === 0, why: `${o.x},${o.z}` });
+  T.check('첫 컨베이어는 시작 쪽(+z)으로 민다', { ok: Math.abs(o.z - DIFFICULTY[DIFF].belts[0]) < 1e-6 && o.x === 0, why: `${o.x},${o.z}` });
   o.set(0, 0, 0); level.windAt(new THREE.Vector3(0, 5.05, z8 - 15), o);
-  T.check('둘째 컨베이어는 옆(+x)으로 민다', { ok: o.x > 3, why: `${o.x},${o.z}` });
+  T.check('둘째 컨베이어는 옆(+x)으로 민다', { ok: Math.abs(o.x - DIFFICULTY[DIFF].belts[1]) < 1e-6, why: `${o.x},${o.z}` });
   o.set(0, 0, 0); level.windAt(new THREE.Vector3(0, 7.5, z8 - 5), o);
   T.check('점프로 떠 있으면 컨베이어 영향 없음', { ok: o.length() === 0, why: `${o.x},${o.z}` });
 }
@@ -171,3 +177,9 @@ function headwindRun(t0) {
 T.check('골인 언덕·결승 (시험 구간 뒤)', run(build(), [0, 5, z13], [[0, z13 - 9], [0, z13 - 21], [0, z13 - 26]], { maxT: 60 }));
 console.log('  통과 비율(출발 시각별):', JSON.stringify(rate));
 T.report();
+if (!process.env.LAB_DIFFICULTY) {
+  for (const d of ['easy', 'hard']) {
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env: { ...process.env, LAB_DIFFICULTY: d }, stdio: 'inherit' });
+    if (r.status) process.exitCode = 1;
+  }
+}

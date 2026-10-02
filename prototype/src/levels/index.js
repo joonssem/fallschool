@@ -19,6 +19,9 @@ export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', subject: '연습', blurb: '이동·점프·다이브 연습, 기울어지는 시소', coop: true, build: buildLevel },
+  // 난이도 변형: 방 설정(meta)에 새 필드를 만들지 않고 맵 id로 단계를 고른다 (database.rules 변경 없음). docs/37
+  { id: 'labeasy', name: '점프 연구소 시험장 (쉬움)', subject: '연습', blurb: '느리고 넓은 장애물로 연습해요', coop: true, build: (parent, world, opts) => buildLevel(parent, world, { ...opts, difficulty: 'easy' }) },
+  { id: 'labhard', name: '점프 연구소 시험장 (어려움)', subject: '연습', blurb: '빠르고 좁은 장애물에 도전해요', coop: true, build: (parent, world, opts) => buildLevel(parent, world, { ...opts, difficulty: 'hard' }) },
   { id: 'solar', name: '태양계 중력 달리기', subject: '지구·우주', blurb: '행성마다 다른 중력으로 점프', build: buildSolar },
   { id: 'acid', name: '산과 염기 실험실', subject: '화학', blurb: '지시약 색을 보고 길을 골라요', build: buildAcid },
   { id: 'circuit', name: '전기 회로 공장', subject: '물리', blurb: '스위치를 나눠 눌러 전구를 켜요', coop: true, build: buildCircuit },

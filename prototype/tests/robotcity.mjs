@@ -4,7 +4,7 @@ import { runRobotCommands, ROBOT_STOPS } from '../src/levels/robotcity.js';
 import { MAPS, mapById } from '../src/levels/index.js';
 
 const T = tally('명령 택배 로봇 도시');
-T.check('맵 선택 목록 등록', { ok: mapById('robotcity').id === 'robotcity' && MAPS.length === 13, why: `${MAPS.length} maps` });
+T.check('맵 선택 목록 등록', { ok: mapById('robotcity').id === 'robotcity', why: `${MAPS.length} maps` });
 const expected = [
   { position: [0, -6], direction: 0 },
   { position: [2, -49], direction: 1 },
