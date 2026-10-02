@@ -11,10 +11,11 @@ import { buildColorStudio } from './colorstudio.js';
 import { buildGeometryLab } from './geometrylab.js';
 import { buildWindVillage } from './windvillage.js';
 import { buildShadowTheater } from './shadowtheater.js';
+import { buildRobotCity } from './robotcity.js';
 
 // 맵 항목: id, name, build + (선택) subject(분류), blurb(한 줄 설명), coop(친구와 함께 해야 하는 장치가 있나)
 // 선택 화면은 subject 로 묶어 보여 준다. 적지 않으면 '기타'.
-export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명', '수학', '미술'];
+export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명', '수학', '미술', '정보'];
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', subject: '연습', blurb: '이동·점프·다이브 연습, 기울어지는 시소', coop: true, build: buildLevel },
@@ -29,6 +30,7 @@ export const MAPS = [
   { id: 'geometrylab', name: '도형 건축 연구소', subject: '수학', blurb: '전개도를 접고 대칭 다리를 만들어요', coop: false, build: buildGeometryLab },
   { id: 'windvillage', name: '바람마을', subject: '지구·우주', blurb: '바람 방향을 보고 순풍 길을 골라요', coop: false, build: buildWindVillage },
   { id: 'shadowtheater', name: '그림자 변신 극장', subject: '물리', blurb: '물체를 바꿔 그림자 공연을 만들어요', coop: false, build: buildShadowTheater },
+  { id: 'robotcity', name: '명령 택배 로봇 도시', subject: '정보', blurb: '명령을 고쳐 배송하고 길을 열어요', coop: false, build: buildRobotCity },
 ];
 
 // 분류별로 묶기: [[분류, [맵…]], …] (SUBJECTS 순서, 모르는 분류는 뒤에)
