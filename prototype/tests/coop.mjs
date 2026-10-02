@@ -53,4 +53,26 @@ T.check('판막: 혼자 연습(1명)', valve([], 1, [-6, 1.5, -39], [[-6, -39], 
   const r = valve(AHEAD, 21, [-6, 1.5, -39], [[-6, -39], [-5, -39], [-6, -39], ...PASS]);
   T.check('판막: 한 발판에만 서 있으면 안 열림', { ok: !r.ok, why: '열려 버림' });
 }
+
+// ── 전기 회로: 확장 도전은 선택 (양옆 건너뛰기 길) + 밝기 실험대 ──
+{
+  const m = circuit(2);
+  T.check('확장 도전 문을 건너뛰고 결승까지 (왼쪽 길)', run(m, [0, 1.5, -86], [[-20, -88], [-20, -100], [-20, -110], [0, -114]], { maxT: 60 }));
+  T.check('확장 도전 문을 건너뛰고 결승까지 (오른쪽 길)', run(circuit(3), [0, 1.5, -86], [[20, -88], [20, -100], [20, -110], [0, -114]], { maxT: 60 }));
+}
+{
+  const m = circuit(2);
+  const b = m.level.bulbBench, g = () => b.glow();
+  const PAD = { series: -15, parallel: -12.5, remove: -10 };
+  T.check('처음엔 기준 전구만 켜짐', { ok: g().ref > 0.5 && g().a === 0 && g().b === 0, why: JSON.stringify(g()) });
+  T.check('직렬 발판 밟기', run(m, [-16, 1.5, -85], [[PAD.series, -86.2]], {}));
+  T.check('직렬: 전구 둘이 기준보다 어둡고 켜져 있음', { ok: g().a > 0 && g().a < g().ref && g().b === g().a, why: JSON.stringify(g()) });
+  T.check('병렬 발판 밟기', run(m, [PAD.series, 1.65, -86.2], [[PAD.parallel, -86.2]], {}));
+  T.check('병렬: 전구 둘이 기준과 같은 밝기', { ok: g().a === g().ref && g().b === g().ref, why: JSON.stringify(g()) });
+  T.check('전구 빼기 발판 밟기 (병렬)', run(m, [PAD.parallel, 1.65, -86.2], [[PAD.remove, -86.2]], {}));
+  T.check('병렬에서 하나를 빼도 나머지는 켜져 있음', { ok: b.removed && g().a === g().ref, why: JSON.stringify(g()) });
+  T.check('직렬로 바꾼 뒤 빼면 나머지도 꺼짐', { ok: (() => { b.mode = 'series'; b.removed = true; return g().a === 0 && g().b < g().ref; })(), why: JSON.stringify(g()) });
+  m.level.resetProgress();
+  T.check('진행 초기화하면 실험대도 처음으로', { ok: b.mode === null && !b.removed && b.seen.size === 0, why: String(b.seen.size) });
+}
 T.report();

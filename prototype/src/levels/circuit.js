@@ -12,6 +12,7 @@
 // 먼저 도착한 학생은 뒤에 학생이 많이 남아 있으므로 그대로 친구를 기다려 함께 누른다.
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, shuffleGates, sectionFinder } from './kit.js';
+import { dynamicSign } from './variants.js';
 
 const C = {
   floor: 0xe9ecef,
@@ -229,28 +230,32 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   });
 
   // ─── 예측 문 두 개 ──────────────────────────────────
-  const a1 = platform(0, Y, -87, 14, 6, C.checkpoint);
-  sign('확장 도전', -8, Y + 3.4, -88, { width: 5, color: '#118ab2', lines: ['확장 도전', '전구 밝기 비교', '(같은 전구·같은 전지)'], rotY: 0.4 });
+  // 확장 도전은 선택이다: 예측 문 양옆으로 건너뛰는 길(x ±20)이 있고, 문 앞 왼쪽에 밝기 실험대가 있다.
+  const a1 = platform(0, Y, -87, 44, 6, C.checkpoint);
+  for (const sx of [-1, 1]) platform(sx * 20, Y, -93.5, 4, 7.2, C.floor2); // 문 1 옆 건너뛰기 길
+  sign('확장 도전 (선택)', 15, Y + 3.4, -88, { width: 5, color: '#118ab2', lines: ['확장 도전 (선택)', '전구 밝기 · 같은 전구·같은 전지', '문이 어려우면 양옆 길로 가요'], rotY: -0.4 });
+  const bulbBench = buildBulbBench();
   checkpoint(a1, new THREE.Vector3(0, Y, -86), '예측 문 1');
   choiceGate({
     z: -90,
     y: Y,
     name: '더 밝게',
     question: '[확장 도전] 같은 전구 두 개를 더 밝게 켜려면?',
-    hint: '같은 전지 한 개와 같은 전구 두 개로 비교해요',
+    hint: ['같은 전지 한 개와 같은 전구 두 개로 비교해요', '왼쪽 밝기 실험대에서 확인할 수 있어요'],
     options: [{ text: '병렬로 연결', correct: true }, { text: '직렬로 연결' }, { text: '어떻게 해도 같아요' }],
     right: '정답! 같은 전지 한 개, 같은 전구 두 개라면 병렬로 연결할 때가 직렬로 연결할 때보다 밝아요',
     wrong: '다시! 같은 전지에 같은 전구 두 개를 직렬로 연결하면 전구 하나일 때보다 어두워요',
     color: '#118ab2',
   });
-  const a2 = platform(0, Y, -100, 14, 6, C.checkpoint);
+  const a2 = platform(0, Y, -100, 44, 6, C.checkpoint);
+  for (const sx of [-1, 1]) platform(sx * 20, Y, -106.5, 4, 7.2, C.floor2); // 문 2 옆 건너뛰기 길
   checkpoint(a2, new THREE.Vector3(0, Y, -99), '예측 문 2');
   choiceGate({
     z: -103,
     y: Y,
     name: '하나를 빼도',
     question: '[확장 도전] 하나를 빼도 켜져 있는 연결은?',
-    hint: '같은 전구 두 개 중 하나를 빼면?',
+    hint: ['같은 전구 두 개 중 하나를 빼면?', '왼쪽 밝기 실험대에서 확인할 수 있어요'],
     options: [{ text: '병렬 연결', correct: true }, { text: '직렬 연결' }, { text: '둘 다 꺼져요' }],
     right: '정답! 병렬 연결은 갈래가 따로라서 전구 하나를 빼도 다른 전구는 켜져 있어요',
     wrong: '다시! 직렬 연결은 한 줄로 이어져 있어요. 하나를 빼면 회로가 어떻게 될까?',
@@ -258,7 +263,7 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
   });
 
   // ─── 결승 ───────────────────────────────────────────
-  const goal = platform(0, Y, -116, 14, 12, C.floor);
+  const goal = platform(0, Y, -116, 44, 12, C.floor);
   for (const sx of [-1, 1]) block(sx * 6.4, Y + 7, -114, 1, 7, 1, C.wall, { castShadow: true });
   const arch = new THREE.Mesh(new THREE.BoxGeometry(13.8, 0.8, 1), mat(C.wireOn, { emissive: 0x886600 }));
   arch.position.set(0, Y + 7.4, -114);
@@ -367,5 +372,79 @@ export function buildCircuit(parent, world, { seed = Date.now() } = {}) {
     shuffleGates(level, s);
   };
   level.setSeed(seed);
-  return finalizeLevel(level);
+  level.bulbBench = bulbBench; // 시험용
+  finalizeLevel(level);
+  const baseReset = level.resetProgress;
+  level.resetProgress = () => { baseReset(); bulbBench.reset(); };
+  return level;
+
+  // 밝기 실험대(선택): 같은 전지·같은 전구 두 개를 직렬 또는 병렬로 이었을 때 밝기를 전구 하나(기준)와 비교하고, 전구 하나를 빼 보는 모형이다.
+  // 밝기 값은 "같은 전지·같은 전구" 이상적인 모형이다(실제 전구·전지는 조금씩 다르다). 상태는 학생별이고, 기본 완주·확장 도전 문과 무관하다.
+  function buildBulbBench() {
+    const GLOW = { off: 0, dim: 0.35, full: 0.9 };
+    const state = { mode: null, removed: false, seen: new Set(), pads: [] };
+    const X = { ref: -16.2, a: -13, b: -9.8 }, BZ = -89.5, BY = 4.3;
+    const bulbs = {};
+    function bulb(key, x, label) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.65, 16, 12), new THREE.MeshStandardMaterial({ color: 0xfff3b0, roughness: 0.3, emissive: 0xffd60a, emissiveIntensity: 0 }));
+      m.position.set(x, BY, BZ);
+      root.add(m);
+      sign(label, x, BY - 1.3, BZ + 0.05, { width: 2.8, color: '#2b2d42' });
+      bulbs[key] = m;
+    }
+    bulb('ref', X.ref, '기준 (전구 1개)');
+    bulb('a', X.a, '전구 A');
+    bulb('b', X.b, '전구 B');
+    const title = dynamicSign(root, { x: -13, y: 7.3, z: BZ, width: 6.4, rows: 2, color: '#118ab2' });
+    const PADS = [
+      { x: -15, kind: 'series', name: '직렬로 연결', color: 0xef476f },
+      { x: -12.5, kind: 'parallel', name: '병렬로 연결', color: 0x06d6a0 },
+      { x: -10, kind: 'remove', name: '전구 B 빼기', color: 0xffd166 },
+    ];
+    PADS.forEach((pd) => {
+      const material = new THREE.MeshStandardMaterial({ color: pd.color, roughness: 0.55 });
+      const mesh = platform(pd.x, Y + 0.15, -86.2, 2, 2, pd.color, { material });
+      sign(pd.name, pd.x, Y + 2.1, -87.5, { width: 2.4, color: '#2b2d42' });
+      state.pads.push({ ...pd, mesh, occupied: false });
+    });
+    function glow() {
+      const g = { ref: GLOW.full, a: GLOW.off, b: GLOW.off };
+      if (state.mode === 'series') { g.a = state.removed ? GLOW.off : GLOW.dim; g.b = GLOW.dim; }
+      if (state.mode === 'parallel') { g.a = GLOW.full; g.b = GLOW.full; }
+      return g;
+    }
+    function paint() {
+      const g = glow();
+      for (const k of ['ref', 'a', 'b']) bulbs[k].material.emissiveIntensity = g[k];
+      bulbs.b.visible = !state.removed;
+      title.set(['전구 밝기 실험대 (모형)', `같은 전지·같은 전구 · 관찰 ${state.seen.size} / 4`]);
+    }
+    movers.push({ root: null, update(t, dt, player) {
+      const p = player?.pos;
+      for (const pad of state.pads) {
+        const on = !!p && Math.abs(p.x - pad.x) < 1.1 && Math.abs(p.z + 86.2) < 1.1 && p.y > 1.3 && p.y < 2.8;
+        if (on && !pad.occupied) {
+          if (pad.kind === 'remove') {
+            if (!state.mode) level.onMessage?.('먼저 직렬이나 병렬로 연결해요.', false);
+            else {
+              state.removed = !state.removed;
+              if (state.removed) {
+                state.seen.add(state.mode === 'series' ? 'removeSeries' : 'removeParallel');
+                level.onMessage?.(state.mode === 'series' ? '직렬에서 전구 하나를 빼면 회로가 끊겨 나머지도 꺼져요.' : '병렬에서 전구 하나를 빼도 나머지는 켜져 있어요.', true);
+              } else level.onMessage?.('전구 B를 다시 끼웠어요.', true);
+            }
+          } else {
+            state.mode = pad.kind; state.removed = false; state.seen.add(pad.kind);
+            level.onMessage?.(pad.kind === 'series' ? '직렬: 전구 두 개가 한 줄이에요. 전구 하나일 때보다 어두워요.' : '병렬: 갈래가 따로예요. 전구 하나일 때와 같은 밝기예요.', true);
+          }
+          paint();
+        }
+        pad.occupied = on;
+      }
+    } });
+    state.reset = () => { state.mode = null; state.removed = false; state.seen.clear(); state.pads.forEach((pd) => { pd.occupied = false; }); paint(); };
+    state.glow = glow;
+    state.reset();
+    return state;
+  }
 }
