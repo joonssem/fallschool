@@ -160,6 +160,13 @@ function headwindRun(t0) {
   T.check('움직이는 발판: 어떤 시각에는 지나감', { ok: movers > 0, why: String(movers) });
   T.check('바람 다리: 어떤 시각에는 지나감', { ok: wind > 0, why: String(wind) });
 }
+// 시소 안전 길(선택): 시소를 거치지 않고 서쪽 외길로 시험장 입구까지, 시소 기울기와 무관
+{
+  const m = build();
+  T.check('시소 안전 길(외길)로 시험 구간 입구까지', run(m, [0, 5, -180], [[-7.5, -183.5], [-9, -190], [-9, -204], [-9, -218], [-7.5, -226], [0, z5]], { maxT: 60 }));
+  const seesawMid = run(build(), [-9, 5, -190], [[-9, -218]], { nojump: true, maxT: 30 });
+  T.check('외길을 점프 없이도 곧게 걸어서 통과', seesawMid);
+}
 // 골인
 T.check('골인 언덕·결승 (시험 구간 뒤)', run(build(), [0, 5, z13], [[0, z13 - 9], [0, z13 - 21], [0, z13 - 26]], { maxT: 60 }));
 console.log('  통과 비율(출발 시각별):', JSON.stringify(rate));

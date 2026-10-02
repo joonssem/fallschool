@@ -106,7 +106,14 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   });
   // 문 뒤(-54)부터: 예전 좌표에서 11만큼 뒤로 민 값
   info(1, 9, -52, '달', '실제 중력: 지구의 약 1/6', '게임 중력: 약 1/3 (조작용으로 조정)');
-  platform(-2, 9, -68, 8, 12, C.moon);
+  // 달 높이뛰기 탑(선택): 달의 약한 중력이라야 오르는 높은 계단 (한 칸 +4.5m. 지구 점프 높이는 약 1.9m, 달은 약 5.6m). 꼭대기에 도전 별.
+  // 떨어지면 '달 평원' 체크포인트에서 다시 시작한다. 안 올라가도 길은 이어진다.
+  const plain = platform(-2, 9, -68, 8, 12, C.moon);
+  checkpoint(plain, new THREE.Vector3(-2, 9, -68), '달 평원');
+  platform(9, 13.5, -62, 5, 5, C.moonDark);
+  platform(16, 18, -66, 5, 5, C.moon);
+  challengeStar(9, 22.5, -70);
+  sign('달 높이뛰기 (선택)', 6.2, 18.5, -57, { width: 5, color: '#6a4c93', lines: ['달 높이뛰기 (선택)', '약한 중력이라 높은 계단도 올라요', '꼭대기에 별! 떨어져도 괜찮아요'], rotY: -0.45 });
   platform(2, 10, -86, 8, 8, C.moonDark);
   block(2, 13.5, -89.5, 8, 3.5, 1, C.moonDark, { castShadow: true });
   sign('달에서는 이 벽도 넘을 수 있어요', 2, 16.5, -88.9, { width: 7 });

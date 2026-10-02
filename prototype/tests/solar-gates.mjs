@@ -27,4 +27,17 @@ T.check('달 HUD에 실제 값 표시', { ok: hud(-50).includes('실제'), why: 
   T.check('첫 오답은 첫 번째 힌트', { ok: msgs[0]?.[0] === g.wrong[0] && !msgs[0][1], why: String(msgs[0]) });
   T.check('두 번째 오답은 정답 설명', { ok: msgs[1]?.[0] === g.wrong[1], why: String(msgs[1]) });
 }
+
+// 달 높이뛰기 탑(선택): 달의 중력이라야 오른다. 달 평원 체크포인트에서 꼭대기 별까지, 같은 높이를 지구 중력으로는 못 오른다
+{
+  const m = (await loadMap('solar'))(3);
+  const climb = [[9, -62], [16, -66], [9, -70]];
+  T.check('달 높이뛰기 탑을 올라 별까지', run(m, [-2, 9, -68], climb, { maxT: 40 }));
+  T.check('꼭대기 별을 얻음', { ok: m.level.stars.some((st) => st.got && st.mesh.position.y > 20), why: '별 미획득' });
+  T.check('달 평원 체크포인트가 있음', { ok: m.level.checkpoints.some((c) => c.name === '달 평원'), why: m.level.checkpoints.map((c) => c.name).join() });
+  const earth = (await loadMap('solar'))(3);
+  earth.level.gravityAt = () => 1; // 지구 중력이면 같은 계단을 오를 수 없다 (한 칸 +4.5m)
+  const r = run(earth, [-2, 9, -68], climb, { maxT: 20 });
+  T.check('지구 중력이면 같은 계단은 오르지 못함', { ok: !r.ok, why: '지구 중력에서도 올랐음' });
+}
 T.report();
