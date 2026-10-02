@@ -25,7 +25,7 @@ for (const t of [8, 24, 72]) {
 T.check('과학 오답 낙하를 요구하는 문 없음', { ok: m.level.gates.length === 0, why: '' });
 T.check('도움 점프 허용', { ok: m.level.checkpoints.every((cp) => !cp.noHelp), why: '' });
 for (const seed of [1, 7, 99]) for (const t0 of [0, 8, 16, 24]) for (const side of [-7, 7]) {
-  const route = [[0, -29], [side, -33], [side, -49], [side, -66], [0, -70], [0, -90], [0, -96], [0, -103], [-8, -108], [9, -110], [9, -120], [-9, -126], [-9, -138], [0, -148], [0, -160]];
+  const route = [[0, -29], [side, -33], [side, -49], [side, -66], [0, -70], [0, -90], [0, -96], [0, -103], [-8, -105], [8, -105], [8, -112.3], [9, -116], [9, -120], [-9, -126], [-9, -138], [0, -148], [0, -160]];
   T.check(`전 구간 ${side < 0 ? '순풍' : '역풍'} seed=${seed} t=${t0}`, run(build(seed), [0, 0, 2], route, { t0, maxT: 120 }));
 }
 
@@ -58,4 +58,37 @@ for (const tz of [-43.4, -43.8, -44.0]) {
   T.check(`바람이 없으면 닿지 않고 길로 내려앉음 (도약 z=${tz})`, { ok: !n.onIsland && !n.fell && Math.abs(n.y) < 0.1, why: JSON.stringify(n) });
 }
 for (const x of [-9.8, -4.6]) T.check(`도약대 옆 길로 지나감 x=${x}`, run(build(), [0, 0, -29], [[x, -33], [x, -49], [x, -66]], { maxT: 40 }));
+
+// 낮·밤 도약(선택): 해당 시각의 바람이면 섬(높이 3.5)에 닿고, 바람이 없거나 반대면 닿지 않고 해안 길(높이 2)에 내려앉는다
+function coastJump(dir, z, t0, windOn, takeoffX) {
+  const mm = build(1);
+  if (!windOn) mm.level.windAt = () => {};
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(-dir * 12.5, 2, z), 0);
+  let t = t0, jumped = false;
+  for (let i = 0; i < 1500; i++) {
+    mm.level.update(t, S, p);
+    if (!jumped && (dir > 0 ? p.pos.x > takeoffX : p.pos.x < takeoffX)) { p.requestJump(); jumped = true; }
+    p.step(S, { x: dir, y: 0 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt);
+    if (jumped && p.grounded && (dir > 0 ? p.pos.x > -5 : p.pos.x < 5)) {
+      const onIsland = p.pos.y > 3;
+      for (let k = 0; k < 120 && onIsland; k++) { // 섬에 내리면 별 쪽으로 걸어간다
+        const cx = mm.level.coastJumps[dir > 0 ? 'day' : 'night'].islandX;
+        mm.level.update(t, S, p); p.step(S, { x: Math.abs(p.pos.x - cx) > 0.5 ? dir : 0, y: 0 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt); t += S;
+      }
+      return { onIsland, y: p.pos.y, star: mm.level.stars.some((s) => s.got) };
+    }
+    if (p.pos.y < -10) return { onIsland: false, y: p.pos.y, fell: true };
+    t += S;
+  }
+  return { onIsland: false, stuck: true };
+}
+const DAY = BREEZE_PERIOD / 4 - 1.5, NIGHT = BREEZE_PERIOD * 3 / 4 - 1.5;
+for (const [name, dir, z, good, bad] of [['낮 도약대(동쪽)', 1, -109, DAY, NIGHT], ['밤 도약대(서쪽)', -1, -138, NIGHT, DAY]]) for (const edge of [5.8, 6.2]) {
+  const takeoff = -dir * edge;
+  const w = coastJump(dir, z, good, true, takeoff), n = coastJump(dir, z, good, false, takeoff), o = coastJump(dir, z, bad, true, takeoff);
+  T.check(`${name}: 맞는 바람이면 섬과 별 (도약 ${edge})`, { ok: w.onIsland && w.star, why: JSON.stringify(w) });
+  T.check(`${name}: 바람이 없으면 못 닿고 해안 길로 (도약 ${edge})`, { ok: !n.onIsland && !n.fell && Math.abs(n.y - 2) < 0.1, why: JSON.stringify(n) });
+  T.check(`${name}: 반대 바람이면 못 닿고 해안 길로 (도약 ${edge})`, { ok: !o.onIsland && !o.fell && Math.abs(o.y - 2) < 0.1, why: JSON.stringify(o) });
+}
 T.report();

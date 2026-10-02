@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, sectionFinder } from './kit.js';
 import { makeWindAt, pressureAt, seaLandBreeze, isDay } from '../wind.js';
+import { BoxCollider } from '../physics.js';
 
 export const BREEZE_PERIOD = 32;
 export function buildWindVillage(parent, world, { seed = 1 } = {}) {
@@ -135,10 +136,11 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
   level.breezePeriod = BREEZE_PERIOD;
   marker('바다', -11, 5.3, -108, '#2467a3'); marker('육지', 11, 5.3, -108, '#45803b');
   const showBreeze = board(-7, 6.7, -114, 6);
-  gauge(-7, 3.3, -109, breeze); gauge(5, 3.3, -138, breeze);
+  gauge(-7, 3.3, -105.5, breeze); gauge(5, 3.3, -134, breeze);
   sign('해풍·육풍', -10, 5.5, -142, { width: 6, lines: ['낮 해풍: 바다에서 육지로', '밤 육풍: 육지에서 바다로', '바람이 도우면 건너 보세요'] });
   const sun = new THREE.Mesh(new THREE.SphereGeometry(1.1, 16, 12), mat(0xffdd55)); sun.position.set(15, 11, -123); level.root.add(sun);
   const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat(0xdfe5fa)); moon.position.set(-15, 11, -123); level.root.add(moon);
+  buildCoastJumps();
   road(0, 2, -149, 26, 12, color.land);
   const goal = road(0, 2, -160, 22, 14, color.land);
   sign('바람마을 도착!', 0, 6, -159, { width: 7, lines: ['바람마을 도착!', '어느 길에서 바람이 도왔나요?', '낮과 밤에 방향은 어땠나요?'] });
@@ -150,6 +152,38 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     const roof = new THREE.Mesh(new THREE.ConeGeometry(4.2, 2.7, 4), mat(0xc9846f));
     house.position.set(side * 23, 0, 5 - i * 22); roof.position.copy(house.position).add(new THREE.Vector3(0, 3.3, 0)); roof.rotation.y = Math.PI / 4;
     level.root.add(house, roof);
+  }
+
+  // 낮·밤 도약(선택): 해풍(낮, 바다→육지=동쪽)이면 동쪽 섬으로, 육풍(밤, 육지→바다=서쪽)이면 서쪽 섬으로 뛰어야 닿는다.
+  // 바람이 반대이면 틈에 닿지 못하고 아래 해안 길(높이 2)에 안전하게 내려앉는다. 기본 길과 무관한 선택이다.
+  function buildCoastJumps() {
+    const J = { gap: 6.6, deckW: 3, topY: 5, islandY: 3.5 };
+    const deckMat = 0xe6f4ea;
+    function xRamp(xFrom, xTo, y0, y1, z, width) { // x 방향으로 오르는 경사로
+      const run = Math.abs(xTo - xFrom), rise = y1 - y0, theta = Math.atan2(rise, run), len = Math.hypot(run, rise), dir = Math.sign(xTo - xFrom);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, 1, width), mat(0xbce5cf));
+      mesh.rotation.z = dir > 0 ? theta : -theta;
+      mesh.position.set((xFrom + xTo) / 2 - 0.5 * Math.sin(theta) * -1 * 0, (y0 + y1) / 2 - 0.5 * Math.cos(theta), z);
+      mesh.position.x += dir * 0.5 * Math.sin(theta) * -1;
+      level.root.add(mesh);
+      mesh.userData.collider = level.world.add(new BoxCollider(mesh, new THREE.Vector3(len / 2, 0.5, width / 2)));
+    }
+    function device({ dir, z, label, lines, labelColor }) { // dir +1: 서쪽에서 동쪽으로 뛴다 (낮), -1: 동쪽에서 서쪽으로 (밤)
+      const deckX = -dir * 7;
+      xRamp(-dir * 13.5, -dir * 8.5, 2, J.topY, z, 2.4);
+      block(deckX, J.topY, z, J.deckW, J.topY - 2, J.deckW, deckMat); // 도약대 (바닥까지 닿는 기둥 모양)
+      const islandX = deckX + dir * (J.deckW / 2 + J.gap + 2);
+      block(islandX, J.islandY, z, 4, J.islandY - 2, 4, deckMat);
+      const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), mat(0xffd60a, { emissive: 0xffb703, emissiveIntensity: 0.8 }));
+      star.position.set(islandX, J.islandY + 1.4, z); star.castShadow = true; level.root.add(star);
+      level.stars.push({ mesh: star, got: false });
+      sign(label, deckX - dir * 0.5, J.topY + 3.2, z + 3.2, { width: 5, color: labelColor, lines });
+      return { deckX, islandX, z };
+    }
+    level.coastJumps = {
+      day: device({ dir: 1, z: -109, label: '낮 도약대 (선택)', labelColor: '#c07a1a', lines: ['낮 도약대 (선택)', '낮에는 바다에서 육지로 불어요', '동쪽으로 뛰어 별까지! 밤엔 어려워요'] }),
+      night: device({ dir: -1, z: -138, label: '밤 도약대 (선택)', labelColor: '#3a4a8a', lines: ['밤 도약대 (선택)', '밤에는 육지에서 바다로 불어요', '서쪽으로 뛰어 별까지! 낮엔 어려워요'] }),
+    };
   }
 
   // 순풍 도약(선택): 왼쪽 순풍 길 한가운데의 도약대에서 앞의 섬으로 뛴다. 틈은 바람 없이는 닿지 않고
