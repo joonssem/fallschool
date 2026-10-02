@@ -157,10 +157,29 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   sign('지하수', 10.5, 4, -104, { width: 4, color: '#754c24', lines: ['지하수', '땅속으로 스며들어', '천천히 흘러가요'], rotY: -0.4 });
 
   buildGlacierLane();
-  const merge = platform(0, Y, -125, 18, 12, C.seaLight);
+  const merge = platform(0, Y, -123.5, 18, 9, C.seaLight); // 문 앞까지만 (틀린 문 아래는 비워 둔다)
   checkpoint(merge, new THREE.Vector3(0, Y, -122), '강 하구');
   sign('강 하구', -9, 6, -123, { width: 4, color: '#167d9a', lines: ['강 하구', '지표수·지하수·빙하 녹은 물이', '바다로 모여요'], rotY: 0.45 });
-  platform(0, 0.8, -135, 12, 8, C.sea);
+  // 순환 마무리 문: 바다에 닿은 물이 다음에 어떻게 되는지 떠올려 순환을 이어 본다 (틀린 문은 떨어져 강 하구 체크포인트에서 다시)
+  choiceGate({
+    z: -128,
+    y: Y,
+    name: '다시 증발',
+    question: '바다에 모인 물이 햇빛에 데워지면 다시?',
+    hint: ['처음 출발한 곳을 떠올려요.', '바다에서 물은 어떻게 하늘로 올라갔나요?'],
+    options: [
+      { text: '증발해 수증기가 돼요', correct: true },
+      { text: '모두 땅속에 갇혀요' },
+      { text: '얼음 알갱이로만 변해요' },
+    ],
+    right: '맞아요! 바닷물도 햇빛에 데워지면 증발해 눈에 보이지 않는 수증기가 되고, 물의 순환이 다시 시작돼요.',
+    wrong: [
+      '순환의 처음을 떠올려요. 바다에서 물은 어떻게 하늘로 올라갔나요?',
+      '햇빛에 데워진 바닷물은 증발해 수증기가 되어 올라가요. 그래서 물은 계속 순환해요.',
+    ],
+    color: '#167d9a',
+  });
+  platform(0, 0.8, -142, 12, 8, C.sea);
   platform(0, 0, -145, 16, 12, C.seaLight);
   const goal = platform(0, 0, -154, 14, 8, C.sea);
   finishPad(goal, -152);
@@ -219,7 +238,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     const iceMat = new THREE.MeshStandardMaterial({ color: 0xbfeaf7, roughness: 0.08, metalness: 0.25 });
     platform(-13.5, Y, -91, 9, 10, C.cloud); // 눈 쌓인 입구 (보통 바닥)
     platform(X, Y, (Z0 + Z1) / 2, 7, len, 0xbfeaf7, { material: iceMat, icy: true });
-    platform(-13.5, Y, -125, 9, 12, C.cloud); // 눈 쌓인 출구
+    platform(-13.5, Y, -123.5, 9, 9, C.cloud); // 눈 쌓인 출구
     for (const wx of [X - 3.7, X + 3.7]) block(wx, Y + 1.3, (Z0 + Z1) / 2, 0.8, 1.3, len, C.cloud, { castShadow: true });
     // 얼음 기둥: 지그재그로 서 있어 돌아 나가야 한다 (점프로 넘어도 된다)
     [[X - 1.6, -102], [X + 1.6, -107.5], [X - 1.6, -113], [X + 1.6, -118]].forEach(([x, z]) => block(x, Y + 1.6, z, 1.8, 1.6, 1.8, 0xd9f3fb, { castShadow: true }));
