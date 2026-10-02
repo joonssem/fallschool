@@ -6,6 +6,9 @@
 // 리트머스 발판: 용액에 넣은 리트머스 종이가 변한 색 발판만 버틴다 (식초: 푸른 종이가 붉게, 비눗물: 붉은 종이가 푸르게).
 // 틀린 색 발판은 밟는 순간 녹아 점프·다이브도 못 한다. 빨리 달리거나 연속 점프로 건너뛰지 못하게 한 것.
 // 한 줄 이상 뛰어넘어도 다섯 줄(13.5m)은 점프 + 다이브로 넘지 못한다.
+//
+// 리트머스 시험대(선택): 두 리트머스 구간 입구 옆에서 용액 2종 × 종이 2종을 골라 넣기 전 → 넣은 뒤를 비교한다.
+// 확정 버튼·문·정답이 없고 쓰지 않아도 길은 같다. 상태는 학생별(자기 위치만 본다)이며 새 경기·처음부터에서 초기화한다.
 import * as THREE from 'three';
 import { mulberry32, createLevel, makeKit, finalizeLevel, shuffleGates, sectionFinder } from './kit.js';
 
@@ -31,6 +34,30 @@ const SECTIONS = [
   { name: '섞으면? 문', zMax: -111 },
   { name: '결승', zMax: -126 },
 ];
+
+// ─── 리트머스 시험대: 결과 판정은 여기 한 곳에서 계산하고 도식·설명이 같은 결과를 쓴다 ───
+export const SOLUTIONS = {
+  vinegar: { name: '식초', acid: true, hex: C.vinegar },
+  soap: { name: '비눗물', acid: false, hex: 0xbfe3f5 }, // 이 실험의 비눗물은 염기성 (제품마다 다를 수 있어 세기는 쓰지 않는다)
+};
+export const PAPERS = {
+  blue: { name: '푸른 종이', color: '푸른색', hex: C.blue },
+  red: { name: '붉은 종이', color: '붉은색', hex: C.red },
+};
+/** 용액·종이 시작 색 → { before, after, changed, afterName, lines } (변하지 않는 경우도 결과로 돌려준다) */
+export function litmusResult(solution, paper) {
+  const sol = SOLUTIONS[solution];
+  const start = PAPERS[paper];
+  if (!sol || !start) throw new Error(`알 수 없는 선택: ${solution}, ${paper}`);
+  const after = sol.acid ? 'red' : 'blue';
+  const changed = after !== paper;
+  const kind = sol.acid ? '산성' : '염기성';
+  const to = sol.acid ? '붉게' : '푸르게';
+  const lines = changed
+    ? [`${start.name}가 ${to} 변했어요`, `${kind} 용액에서는 ${start.name}가 ${to} 변해요`]
+    : [`${start.name}는 그대로 ${sol.acid ? '붉어요' : '푸르러요'}`, `${start.name}는 ${kind} 용액에서 변하지 않아요`];
+  return { before: paper, after, changed, afterName: PAPERS[after].color, lines };
+}
 
 const COLS = 5;
 const ROWS = 5;
@@ -60,6 +87,133 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
     water.position.set(x, baseY + 1.5, z);
     root.add(water);
   }
+
+  // 시험대 결과판: 넣기 전 → 넣은 뒤 도식 (색 + 색 이름), 상태가 바뀔 때만 다시 그린다
+  function resultBoard(x, y, z, width, rotY) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const g = canvas.getContext('2d');
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, (width * 480) / 640), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = rotY;
+    root.add(mesh);
+    const font = (px) => `bold ${px}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+    const text = (str, cx, cy, size, color = '#2b2d42', maxW = 600) => {
+      let px = size;
+      g.font = font(px);
+      while (px > 20 && g.measureText(str).width > maxW) g.font = font((px -= 2));
+      g.fillStyle = color;
+      g.fillText(str, cx, cy);
+    };
+    const swatch = (x0, hex, label) => {
+      g.fillStyle = hex === null ? '#e3e6ec' : `#${hex.toString(16).padStart(6, '0')}`;
+      g.beginPath();
+      g.roundRect(x0, 96, 180, 120, 20);
+      g.fill();
+      g.strokeStyle = '#2b2d42';
+      g.lineWidth = 4;
+      g.stroke();
+      if (hex === null) text('?', x0 + 90, 160, 64, '#8a91a0');
+      text(label, x0 + 90, 244, 34);
+    };
+    let shown = '';
+    return {
+      mesh,
+      draw(solution, paper, sameAsField = false) {
+        const key = `${solution}|${paper}|${sameAsField}`;
+        if (key === shown) return;
+        shown = key;
+        g.clearRect(0, 0, 640, 480);
+        g.fillStyle = '#ffffff';
+        g.beginPath();
+        g.roundRect(4, 4, 632, 472, 36);
+        g.fill();
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        const sol = SOLUTIONS[solution];
+        const pap = PAPERS[paper];
+        const result = sol && pap ? litmusResult(solution, paper) : null;
+        const title = sol && pap ? `${sol.name} + ${pap.name}` : sol ? `용액 · ${sol.name}` : pap ? `종이 · ${pap.name}` : '리트머스 시험대';
+        text(title, 320, 46, 48, '#24485b');
+        swatch(70, pap ? pap.hex : null, pap ? `넣기 전 · ${pap.color}` : '넣기 전');
+        text('→', 320, 156, 64, '#24485b', 80);
+        swatch(390, result ? PAPERS[result.after].hex : null, result ? `넣은 뒤 · ${result.afterName}` : '넣은 뒤');
+        const lines = result
+          ? [...result.lines, ...(solution === 'soap' ? ['(이 실험의 비눗물은 염기성이에요)'] : []), ...(sameAsField ? ['앞 웅덩이와 같은 실험이에요'] : [])]
+          : sol
+            ? ['이제 종이를 골라요']
+            : pap
+              ? ['이제 용액을 골라요']
+              : ['용액과 종이를 골라 보세요', '해 보지 않아도 길은 갈 수 있어요'];
+        lines.forEach((line, i) => text(line, 320, 300 + i * 46, i === 0 ? 38 : 32, line.startsWith('(') ? '#5a6478' : line.startsWith('앞 웅덩이') ? '#1d6b4f' : '#2b2d42'));
+        tex.needsUpdate = true;
+      },
+    };
+  }
+
+  // 시험대: 입구 발판 옆(입구 깊이 안)의 받침 위에 선택 발판 4개. 타일 구간을 따라 길을 만들지 않는다.
+  // side: 입구 발판의 어느 쪽에 둘지(+1 오른쪽, -1 왼쪽, 안내판 반대편), zTop: 입구 발판 윗쪽 끝 z
+  const stations = [];
+  // field: 이 입구 앞 웅덩이가 보여 주는 실험(어떤 용액에 어떤 종이를 넣는가). 같은 조합을 고르면 "앞 웅덩이와 같은 실험"이라고만 알려 주고 답(안전한 색)은 말하지 않는다.
+  function litmusStation(side, zTop, field) {
+    platform(side * 11, Y, zTop - 3, 8, 6, C.floor2);
+    const st = { side, zTop, field, solution: null, paper: null, pads: [] };
+    const board = resultBoard(side * 11, Y + 3.6, zTop - 6.4, 6, -side * 0.2);
+    sign('리트머스 시험대', side * 11, Y + 6.4, zTop - 0.6, { width: 5.5, color: '#6a4c93', lines: ['리트머스 시험대', '용액과 종이를 골라 비교해요'], rotY: -side * 0.35 });
+    const defs = [
+      ['solution', 'vinegar', '식초', SOLUTIONS.vinegar.hex, side * 9.2, zTop - 1.7],
+      ['solution', 'soap', '비눗물', SOLUTIONS.soap.hex, side * 12.8, zTop - 1.7],
+      ['paper', 'blue', '푸른 종이', C.blue, side * 9.2, zTop - 4.3],
+      ['paper', 'red', '붉은 종이', C.red, side * 12.8, zTop - 4.3],
+    ];
+    for (const [kind, value, label, hex, x, z] of defs) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 2.2), new THREE.MeshStandardMaterial({ color: 0xc9ced6 }));
+      mesh.position.set(x, Y + 0.05, z);
+      root.add(mesh);
+      sign(label, x, Y + 1.9, z, { width: 2.6, color: '#2b2d42' });
+      st.pads.push({ kind, value, x, z, hex, mesh, occupied: false });
+    }
+    const paint = () => {
+      for (const pad of st.pads) {
+        const on = st[pad.kind] === pad.value;
+        pad.mesh.material.color.setHex(on ? pad.hex : 0xc9ced6);
+        pad.mesh.scale.set(on ? 1.12 : 1, 1, on ? 1.12 : 1);
+      }
+      board.draw(st.solution, st.paper, st.matchesField());
+    };
+    st.paint = paint;
+    st.board = board;
+    st.matchesField = () => st.solution === field.solution && st.paper === field.paper;
+    st.result = () => (st.solution && st.paper ? litmusResult(st.solution, st.paper) : null);
+    st.reset = () => {
+      st.solution = null;
+      st.paper = null;
+      st.pads.forEach((p) => (p.occupied = false));
+      paint();
+    };
+    movers.push({
+      root: null,
+      update(t, dt, player) {
+        // 내 발만 본다: 다른 학생의 위치·발판 녹음(triggerTile)은 시험대에 영향이 없다
+        const p = player?.pos;
+        for (const pad of st.pads) {
+          const on = !!p && Math.abs(p.x - pad.x) < 1.2 && Math.abs(p.z - pad.z) < 1.2 && p.y > Y - 0.5 && p.y < Y + 1.5;
+          if (on && !pad.occupied && st[pad.kind] !== pad.value) {
+            st[pad.kind] = pad.value;
+            paint();
+          }
+          pad.occupied = on;
+        }
+      },
+    });
+    paint();
+    stations.push(st);
+    return st;
+  }
+  level.litmusStations = stations;
 
   // 옆에 비스듬히 세우는 안내판 (길을 가리지 않게)
   const sideSign = (side, y, z, lines, color) =>
@@ -147,6 +301,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   sideSign(-1, Y, -41, ['식초 웅덩이', '푸른 리트머스 종이를 넣으면?', '변한 색 발판만 버텨요'], '#b08900');
   litmusField(-45.7, 'red', '식초', '앗, 녹았어요! 식초는 산성 용액이에요. 산성 용액에서 푸른 리트머스 종이는 붉게 변해요. 어떤 색 발판일까?');
   pool(-44, -58, C.vinegar);
+  litmusStation(1, -38, { solution: 'vinegar', paper: 'blue' }); // 식초 안내판은 왼쪽이라 시험대는 오른쪽 (앞 웅덩이: 식초에 푸른 종이)
 
   // 비눗물 웅덩이: 입구 발판(-58 ~ -64) → 발판 5줄 (-64.5 ~ -77.7)
   const cpB = platform(0, Y, -61, 14, 6, C.floor2);
@@ -154,6 +309,7 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
   sideSign(1, Y, -61, ['비눗물 웅덩이', '붉은 리트머스 종이를 넣으면?', '변한 색 발판만 버텨요'], '#1d4ed8');
   litmusField(-65.7, 'blue', '비눗물', '앗, 녹았어요! 비눗물은 염기성 용액이에요. 염기성 용액에서 붉은 리트머스 종이는 푸르게 변해요. 어떤 색 발판일까?');
   pool(-64, -78, C.soap);
+  litmusStation(-1, -58, { solution: 'soap', paper: 'red' }); // 비눗물 안내판은 오른쪽이라 시험대는 왼쪽 (앞 웅덩이: 비눗물에 붉은 종이)
 
   // 녹은 발판은 가라앉았다가 잠시 뒤 제자리로 (색은 그대로라 다시 봐도 판단은 같다)
   movers.push({
@@ -289,9 +445,16 @@ export function buildAcid(parent, world, { seed = Date.now() } = {}) {
       }
       field.hinted = false;
     });
+    stations.forEach((st) => st.reset());
     shuffleGates(level, s);
   };
   level.revealPath = () => {};
   level.setSeed(seed);
-  return finalizeLevel(level);
+  finalizeLevel(level);
+  const resetProgress = level.resetProgress;
+  level.resetProgress = () => {
+    resetProgress();
+    stations.forEach((st) => st.reset());
+  };
+  return level;
 }
