@@ -12,7 +12,7 @@ export class BoxCollider {
   /**
    * @param {THREE.Object3D} object 박스의 월드 변환을 결정하는 객체 (스케일 1이어야 함)
    * @param {THREE.Vector3} half 박스 반 크기
-   * @param {object} opts kind: 'solid' | 'bounce' | 'bumper', dynamic, slippery, onStand
+   * @param {object} opts kind: 'solid' | 'bounce' | 'bumper', dynamic, slippery, icy, onStand
    */
   constructor(object, half, opts = {}) {
     this.object = object;
@@ -20,6 +20,7 @@ export class BoxCollider {
     this.kind = opts.kind || 'solid';
     this.dynamic = !!opts.dynamic;
     this.slippery = !!opts.slippery;
+    this.icy = !!opts.icy; // 평평한 얼음: 가속·감속이 느려 미끄러진다 (slippery는 경사에서 밀려 내려가는 것)
     this.bounceSpeed = opts.bounceSpeed ?? null; // 'bounce' 발판마다 튕기는 힘을 다르게
     this.onStand = opts.onStand || null;
     this.enabled = true;

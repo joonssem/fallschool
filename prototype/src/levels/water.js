@@ -41,7 +41,7 @@ const SECTIONS = [
   { name: '증발 상승로', zMax: -27 },
   { name: '응결 구름', zMax: -48 },
   { name: '강수', zMax: -77 },
-  { name: '지표수와 지하수', zMax: -101 },
+  { name: '지표수·지하수·빙하', zMax: -101 },
   { name: '강 하구', zMax: -137 },
   { name: '바다로 돌아가기', zMax: -153 },
 ];
@@ -137,7 +137,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     [-5.5, 1.5, -101], [-5.5, 1.5, -108], [-5.5, 1.5, -115],
   ];
   surface.forEach(([x, y, z], i) => platform(x, y, z, 7, 7, i === 1 ? C.seaLight : C.rock));
-  sign('지표수', -11, 5, -107, { width: 4, color: '#167d9a', lines: ['지표수', '땅 위를 따라', '강으로 흘러가요'], rotY: 0.4 });
+  sign('지표수', -6, 4.2, -107, { width: 4, color: '#167d9a', lines: ['지표수', '땅 위를 따라', '강으로 흘러가요'], rotY: 0.4 });
   level.windAt = (pos, out) => {
     if (pos.z < -99 && pos.z > -120 && pos.y > 0 && pos.y < 5 && pos.x < -2 && pos.x > -9) out.z -= 1.1;
   };
@@ -155,9 +155,10 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   }
   sign('지하수', 10.5, 4, -104, { width: 4, color: '#754c24', lines: ['지하수', '땅속으로 스며들어', '천천히 흘러가요'], rotY: -0.4 });
 
+  buildGlacierLane();
   const merge = platform(0, Y, -125, 18, 12, C.seaLight);
   checkpoint(merge, new THREE.Vector3(0, Y, -122), '강 하구');
-  sign('강 하구', -9, 6, -123, { width: 4, color: '#167d9a', lines: ['강 하구', '지표수와 지하수가', '바다로 모여요'], rotY: 0.45 });
+  sign('강 하구', -9, 6, -123, { width: 4, color: '#167d9a', lines: ['강 하구', '지표수·지하수·빙하 녹은 물이', '바다로 모여요'], rotY: 0.45 });
   platform(0, 0.8, -135, 12, 8, C.sea);
   platform(0, 0, -145, 16, 12, C.seaLight);
   const goal = platform(0, 0, -154, 14, 8, C.sea);
@@ -182,6 +183,21 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   level.setSeed(seed);
   level.evapLifts = EVAP_LIFTS; // 시험용
   return finalizeLevel(level);
+
+  // 빙하 길(선택): 얼음(고체) 위는 미끄럽다. 달리면 멈추기까지 미끄러지니 얼음 기둥 사이를 돌아 나간다.
+  // 양옆은 눈 둔덕이 막아 미끄러져도 떨어지지 않는다. 지표수·지하수와 같은 강 하구로 이어진다(옆 길과 무관한 선택).
+  function buildGlacierLane() {
+    const X = -14, Z0 = -97, Z1 = -122, len = Z0 - Z1;
+    const iceMat = new THREE.MeshStandardMaterial({ color: 0xbfeaf7, roughness: 0.08, metalness: 0.25 });
+    platform(-13.5, Y, -91, 9, 10, C.cloud); // 눈 쌓인 입구 (보통 바닥)
+    platform(X, Y, (Z0 + Z1) / 2, 7, len, 0xbfeaf7, { material: iceMat, icy: true });
+    platform(-13.5, Y, -125, 9, 12, C.cloud); // 눈 쌓인 출구
+    for (const wx of [X - 3.7, X + 3.7]) block(wx, Y + 1.3, (Z0 + Z1) / 2, 0.8, 1.3, len, C.cloud, { castShadow: true });
+    // 얼음 기둥: 지그재그로 서 있어 돌아 나가야 한다 (점프로 넘어도 된다)
+    [[X - 1.6, -102], [X + 1.6, -107.5], [X - 1.6, -113], [X + 1.6, -118]].forEach(([x, z]) => block(x, Y + 1.6, z, 1.8, 1.6, 1.8, 0xd9f3fb, { castShadow: true }));
+    sign('빙하 길 (선택)', X - 2, 5.2, -92.5, { width: 6, color: '#3a8fb7', lines: ['빙하 길 (선택)', '물이 얼음(고체)으로 쌓여 있어요', '미끄러워요 · 녹은 물은 강으로 가요'], rotY: 0.4 });
+    sign('얼음 위', X + 0.5, 4.2, -125.5, { width: 5, color: '#3a8fb7', lines: ['얼음 위는 미끄러워요', '달리다 멈추려면 미리 힘을 빼요'], rotY: 0.4 });
+  }
 
   // 수증기는 눈에 보이지 않는 기체다: 아주 희미한 작은 점으로만 그려 위로 올라가게 한다 (안내판: "점으로 표시")
   function steamDots() {

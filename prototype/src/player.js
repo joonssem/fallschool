@@ -19,6 +19,8 @@ export const TUNING = {
   coyoteTime: 0.1,
   jumpBufferTime: 0.12,
   slideSpeed: 11,
+  iceAccel: 9, // 얼음 위에서 방향을 바꾸는 힘 (보통 바닥 55)
+  iceDecel: 3.2, // 얼음 위에서 멈추는 힘 (보통 바닥 45): 약 7m/s에서 멈추기까지 7m 남짓 미끄러진다
   radius: 0.45,
 };
 
@@ -176,6 +178,7 @@ export class Player {
       const tx = wx * T.maxSpeed;
       const tz = wz * T.maxSpeed;
       let accel = this.grounded ? (hasInput ? T.groundAccel : T.groundDecel) : T.airAccel;
+      if (this.grounded && this.ground?.icy) accel = hasInput ? T.iceAccel : T.iceDecel;
       if (this.state === 'dive') accel = T.airAccel;
       const dx = tx - this.vel.x;
       const dz = tz - this.vel.z;
