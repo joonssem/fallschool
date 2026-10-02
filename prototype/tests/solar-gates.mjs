@@ -40,4 +40,35 @@ T.check('달 HUD에 실제 값 표시', { ok: hud(-50).includes('실제'), why: 
   const r = run(earth, [-2, 9, -68], climb, { maxT: 20 });
   T.check('지구 중력이면 같은 계단은 오르지 못함', { ok: !r.ok, why: '지구 중력에서도 올랐음' });
 }
+
+// 화성 대협곡 도약(선택): 화성 중력(×0.45)이라야 닿는 틈. 폭풍이 서쪽으로 불 때 바람이 도와주며, 어느 출발 시각에도 건널 수 있다
+{
+  const got = (m, x) => m.level.stars.some((st) => st.got && Math.abs(st.mesh.position.x - x) < 1);
+  // 폭풍(4초 주기)이 길에서 학생을 서쪽으로 밀기도 하므로 출발 시각에 따라 닿지 못할 수 있다. 어떤 시각에는 닿아야 한다.
+  let ok = 0;
+  const t0s = [0, 0.7, 1.4, 2.1, 2.8, 3.5];
+  for (const t0 of t0s) {
+    const m = (await loadMap('solar'))(3);
+    run(m, [0, 10, -142], [[-3.5, -142], [-16, -142]], { t0, maxT: 15 });
+    if (got(m, -16)) ok++;
+  }
+  console.log(`  화성 협곡 도약 별을 얻은 출발 시각: ${ok}/${t0s.length}`);
+  T.check('화성 협곡 도약: 어떤 출발 시각에는 별에 닿음 (3/6 이상)', { ok: ok >= 3, why: `${ok}/${t0s.length}` });
+  const earth = (await loadMap('solar'))(3);
+  earth.level.gravityAt = () => 1;
+  run(earth, [0, 10, -142], [[-3.5, -142], [-16, -142]], { maxT: 10 });
+  T.check('지구 중력이면 같은 협곡을 건너지 못함', { ok: !got(earth, -16), why: '지구 중력에서도 닿음' });
+  const mm = (await loadMap('solar'))(3);
+  T.check('화성 폭풍 길 체크포인트', { ok: mm.level.checkpoints.some((c) => c.name === '화성 폭풍 앞'), why: mm.level.checkpoints.map((c) => c.name).join() });
+}
+// 목성 패드 별(선택): 목성에서는 보통 점프로 닿지 않는 높은 발판에 패드로 오른다 (패드 속도는 같아도 중력이 세면 덜 높이 오른다)
+{
+  const got = (m) => m.level.stars.some((st) => st.got && st.mesh.position.x > 5 && st.mesh.position.z < -215);
+  const withPad = (await loadMap('solar'))(3);
+  run(withPad, [-1, 9, -216.5], [[2.2, -216.5], [5.5, -216.5]], { maxT: 10 });
+  T.check('목성 패드를 밟으면 높은 별 발판에 오름', { ok: got(withPad), why: '별 미획득' });
+  const noPad = (await loadMap('solar'))(3);
+  run(noPad, [2.8, 9, -219.5], [[5.5, -216.5]], { maxT: 8 });
+  T.check('패드 없이 보통 점프로는 닿지 않음', { ok: !got(noPad), why: '패드 없이 닿음' });
+}
 T.report();
