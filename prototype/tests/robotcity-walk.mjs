@@ -36,13 +36,32 @@ const zs = [-31, -66, -101];
 ROBOT_STOPS.forEach((stop, i) => {
   const z = zs[i];
   const d = level.deliveries[i];
-  const tilesX = stop.required.map((_, k) => -6 + k * 4);
-  T.check(`${stop.name}: 명령 발판을 차례로 밟기`, { ok: tilesX.every((x) => walk(x, z + 15) && walk(x, z + 12) && walk(x, z + 15)), why: `${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)}` });
+  T.check(`${stop.name}: 앞으로·왼쪽·오른쪽 고정 팔레트`, { ok: ['forward', 'left', 'right'].every((command) => d.grid.some((g) => g.command === command)), why: d.grid.map((g) => g.command).join() });
+  const nearestPadGap = Math.min(...d.grid.flatMap((a, ai) => d.grid.slice(ai + 1).map((b) => Math.hypot(a.x - b.x, a.z - b.z))));
+  T.check(`${stop.name}: 서로 분리된 입력 발판`, { ok: nearestPadGap > 2.1, why: `nearest ${nearestPadGap.toFixed(1)}m` });
+  let commandsWalked = true;
+  for (const command of stop.required) {
+    const tile = d.grid.find((g) => g.command === command);
+    commandsWalked = commandsWalked && walk(tile.x, tile.z + 3) && walk(tile.x, tile.z) && walk(tile.x, tile.z + 3);
+  }
+  T.check(`${stop.name}: 고정 팔레트에서 명령을 순서대로 고르기`, { ok: commandsWalked, why: `${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)}` });
   T.check(`${stop.name}: 명령 ${stop.required.length}개`, { ok: d.commands.length === stop.required.length && d.commands.every((c, k) => c === stop.required[k]), why: d.commands.join() });
+  T.check(`${stop.name}: 화면에 보여 줄 명령 목록이 선택 순서와 일치`, { ok: d.commandLabels.length === d.commands.length && d.commands.every((c, k) => d.commandLabels[k].includes(c === 'forward' ? '앞으로' : c === 'left' ? '왼쪽' : '오른쪽')), why: d.commandLabels.join(' | ') });
   T.check(`${stop.name}: 실행 발판`, { ok: walk(0, z + 19), why: `${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)}` });
   wait(4);
+  T.check(`${stop.name}: 실행 강조 순서도 입력 순서와 일치`, { ok: d.trace.every((step, k) => step.command === stop.required[k]), why: d.trace.map((step) => step.command).join() });
   T.check(`${stop.name}: 배송 성공`, { ok: d.solved && d.targetReached, why: `${d.message} target=${JSON.stringify(d.path.at(-1))}` });
   T.check(`${stop.name}: 문이 열림`, { ok: !d.door.userData.collider.enabled, why: `door y ${d.door.position.y}` });
+  if (i === 0) {
+    walk(7, z + 19);
+    T.check('배송 후 초기화 발판으로 안전하게 재시도', { ok: !d.solved && d.door.userData.collider.enabled, why: `solved=${d.solved}` });
+    for (const command of stop.required) {
+      const tile = d.grid.find((g) => g.command === command);
+      walk(tile.x, tile.z + 3); walk(tile.x, tile.z); walk(tile.x, tile.z + 3);
+    }
+    walk(0, z + 19); wait(4);
+    T.check('재시도 뒤 배송을 다시 완료', { ok: d.solved && !d.door.userData.collider.enabled, why: d.message });
+  }
   const gate = i < 2 ? zs[i + 1] + 17 : -128; // 다음 정류장 앞, 마지막은 결승
   T.check(`${stop.name}: 문을 지나 다음으로`, { ok: walk(-4.5, z - 5) && walk(-4.5, z - 20) && walk(0, gate, 25), why: `${p.pos.x.toFixed(1)},${p.pos.y.toFixed(1)},${p.pos.z.toFixed(1)}` });
 });
@@ -56,5 +75,11 @@ T.check('결승 도착', { ok: walk(0, -128, 20) && level.finished, why: `finish
   T.check('명령이 모자라면 배송 실패·문 닫힘·다시 시도 가능', { ok: !d.solved && d.door.userData.collider.enabled && !d.running, why: d.message });
   d.reset();
   T.check('명령 지우기로 처음 상태', { ok: d.commands.length === 0 && !d.solved, why: d.message });
+}
+{
+  const w3 = new PhysicsWorld(); const l3 = buildRobotCity(new THREE.Scene(), w3, { seed: 1 });
+  const d = l3.deliveries[0]; d.commands = ['left', 'right', 'forward', 'forward', 'forward']; d.run();
+  for (let i = 0; i < 500; i++) l3.update(i * S, S, null);
+  T.check('다른 성공 명령 조합도 같은 목적지에 배송', { ok: d.solved && d.targetReached && d.commands.length !== ROBOT_STOPS[0].required.length, why: `${JSON.stringify(d.commands)} -> ${JSON.stringify(d.path.at(-1))}` });
 }
 T.report();

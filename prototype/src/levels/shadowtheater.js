@@ -24,6 +24,9 @@ export function buildShadowTheater(parent, world, { seed = 1 } = {}) {
   });
   const { platform, block, sign, startCheckpoint, checkpoint, finishPad, challengeStar, mat } = makeKit(level);
   level.theaters = [];
+  const performance = { frames: Array(SHADOW_SCENES.length).fill(null), completedCount: 0, complete: false };
+  level.performance = performance;
+  let paintPerformance = () => {};
   platform(0, 0, 2, 20, 20, 0x8e80ad); startCheckpoint('극장 입구');
   sign('그림자 변신 극장', 0, 5, -5, { width: 8, lines: ['그림자 변신 극장', '바꿔 보고 · 비교하고 · 공연 완성'] });
   sign('작은 빛의 모형', -8, 3, -3, { width: 5, lines: ['빛을 가리면 그림자가 생겨요', '여기서는 작은 광원 하나예요'] });
@@ -39,7 +42,7 @@ export function buildShadowTheater(parent, world, { seed = 1 } = {}) {
     for (const x of [-12, 12]) block(x, 13, z - 3, 16, 12, 1, 0x594166);
     block(0, 13, z - 3, 8, 6, 1, 0x594166);
     const bridge = platform(0, 1, z - 7, 8, 10, 0x9c8daf);
-    const state = { z, kind: config.kind, objects: clone(config.initial), selected: 0, solved: false, attempts: 0, pads: [], door, bridge, similarity: 0 };
+    const state = { z, kind: config.kind, objects: clone(config.initial), selected: 0, solved: false, attempts: 0, pads: [], door, bridge, similarity: 0, performanceFrame: null };
     level.theaters.push(state);
     const targetHulls = config.target.map((b) => projectBox(b));
     const targetMask = shadowMask(targetHulls);
@@ -125,7 +128,8 @@ export function buildShadowTheater(parent, world, { seed = 1 } = {}) {
       if (pad.action === 'submit') {
         state.attempts++;
         if (state.similarity >= 0.975) {
-          state.solved = true; bridge.material = mat(0xb9dfc5); level.onMessage?.('공연 완성! 그림자가 목표와 겹쳤어요. 길이 열렸어요.', true);
+          state.solved = true; state.performanceFrame = clone(state.objects); performance.frames[index] = clone(state.performanceFrame); paintPerformance();
+          bridge.material = mat(0xb9dfc5); level.onMessage?.('그림자 완성! 이 모양이 마지막 공연 무대에 저장돼요. 길이 열렸어요.', true);
         } else level.onMessage?.('아직 목표와 달라요. 결과를 보고 다시 바꿔 보세요.', false);
         paint();
       }
@@ -138,14 +142,77 @@ export function buildShadowTheater(parent, world, { seed = 1 } = {}) {
       }
       lift = Math.min(1, lift + (state.solved ? dt * 2 : 0)); door.position.y = 4 + lift * 7; door.userData.collider.enabled = lift < 0.95; door.updateMatrixWorld(true);
     } });
-    state.reset = () => { state.objects = clone(config.initial); state.selected = 0; state.solved = false; state.attempts = 0; lift = 0; door.position.y = 4; door.userData.collider.enabled = true; bridge.material = mat(0x9c8daf); state.pads.forEach((p) => { p.occupied = false; }); paint(); };
+    state.reset = () => {
+      state.objects = clone(config.initial); state.selected = 0; state.solved = false; state.attempts = 0; state.performanceFrame = null;
+      performance.frames[index] = null; lift = 0; door.position.y = 4; door.userData.collider.enabled = true;
+      bridge.material = mat(0x9c8daf); state.pads.forEach((p) => { p.occupied = false; }); paint(); paintPerformance();
+    };
     state.meshes = meshes; state.screen = screen; state.targetHulls = targetHulls; state.lightOrigin = lightOrigin;
     state.reset();
   }
   SHADOW_SCENES.forEach(room);
   for (const z of [-47, -80, -113, -146]) platform(0, 1, z, 8, 6, 0x8e80ad);
   const goal = platform(0, 1, -159, 20, 14, 0xb9dfc5);
-  sign('커튼콜!', 0, 6, -158, { width: 7, lines: ['커튼콜!', '어떤 선택이 그림자를 바꿨나요?', '빛을 가린 결과를 친구에게 설명해요'] }); finishPad(goal, -157);
+  sign('커튼콜!', 0, 6, -158, { width: 7, lines: ['커튼콜!', '네 무대에서 만든 그림자가 한 공연으로 이어져요'] });
+  const performanceCanvas = document.createElement('canvas'); performanceCanvas.width = 1200; performanceCanvas.height = 620;
+  const performanceCtx = performanceCanvas.getContext('2d');
+  const performanceTexture = new THREE.CanvasTexture(performanceCanvas); performanceTexture.colorSpace = THREE.SRGBColorSpace;
+  const performancePanel = new THREE.Mesh(new THREE.PlaneGeometry(13.2, 6.82), new THREE.MeshBasicMaterial({ map: performanceTexture, toneMapped: false }));
+  performancePanel.position.set(0, 5.8, -164.5); level.root.add(performancePanel);
+  const stageTrim = (x, y, z, sx, sy, sz, color) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat(color)); mesh.position.set(x, y, z); level.root.add(mesh); return mesh; };
+  stageTrim(-7.1, 5.5, -164.2, 0.8, 11, 0.7, 0x773e68);
+  stageTrim(7.1, 5.5, -164.2, 0.8, 11, 0.7, 0x773e68);
+  stageTrim(0, 11.2, -164.2, 15, 0.7, 0.7, 0xdeb968);
+  const spotlights = [-4.8, -1.6, 1.6, 4.8].map((x, i) => {
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), mat([0xffd166, 0x8de0df, 0xffa6c1, 0xc7a6ff][i], { emissive: [0xffd166, 0x8de0df, 0xffa6c1, 0xc7a6ff][i], emissiveIntensity: 0.8 }));
+    lamp.position.set(x, 10.3, -162.8); level.root.add(lamp); return lamp;
+  });
+  paintPerformance = () => {
+    const g = performanceCtx;
+    performance.completedCount = performance.frames.filter(Boolean).length;
+    performance.complete = performance.completedCount === SHADOW_SCENES.length;
+    g.fillStyle = '#21172f'; g.fillRect(0, 0, 1200, 620);
+    const curtain = g.createLinearGradient?.(0, 0, 1200, 0);
+    curtain?.addColorStop?.(0, '#79385e'); curtain?.addColorStop?.(0.12, '#3c234a'); curtain?.addColorStop?.(0.88, '#3c234a'); curtain?.addColorStop?.(1, '#79385e');
+    g.fillStyle = curtain || '#3c234a'; g.fillRect(0, 0, 1200, 620);
+    g.fillStyle = '#f7d78c'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 48px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    g.fillText(performance.complete ? '오늘의 그림자 공연' : '커튼콜 준비 중', 600, 62);
+    g.font = 'bold 28px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    g.fillStyle = '#f4e8ff'; g.fillText(`${performance.completedCount} / ${SHADOW_SCENES.length} 무대 완성`, 600, 112);
+    const labels = ['크기', '방향', '자리', '조합'];
+    const tones = ['#ffd166', '#8de0df', '#ffa6c1', '#c7a6ff'];
+    SHADOW_SCENES.forEach((scene, i) => {
+      const x = 55 + i * 282, y = 156, w = 250, h = 380;
+      g.fillStyle = '#342844'; g.fillRect(x, y, w, h);
+      g.strokeStyle = tones[i]; g.lineWidth = 5; g.strokeRect(x + 3, y + 3, w - 6, h - 6);
+      g.fillStyle = tones[i]; g.font = 'bold 30px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'; g.fillText(`${i + 1}막 · ${labels[i]}`, x + w / 2, y + 34);
+      const frame = performance.frames[i];
+      if (frame) {
+        const view = { xMin: -3.5, xMax: 3.5, yMin: -2.4, yMax: 2.4 };
+        const px = (vx) => x + 22 + (vx - view.xMin) * (w - 44) / (view.xMax - view.xMin);
+        const py = (vy) => y + 80 + (view.yMax - vy) * 220 / (view.yMax - view.yMin);
+        g.fillStyle = tones[i]; g.shadowColor = tones[i]; g.shadowBlur = 22;
+        frame.forEach((object) => {
+          const hull = projectBox(object); if (hull.length < 3) return;
+          g.beginPath(); hull.forEach(([vx, vy], j) => j ? g.lineTo(px(vx), py(vy)) : g.moveTo(px(vx), py(vy))); g.closePath(); g.fill();
+        });
+        g.shadowBlur = 0;
+        g.fillStyle = '#d5f7d2'; g.font = 'bold 23px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'; g.fillText('완성', x + w / 2, y + 337);
+      } else {
+        g.fillStyle = '#c2b8d1'; g.font = '24px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'; g.fillText('무대 준비 중', x + w / 2, y + 240);
+      }
+    });
+    g.fillStyle = '#ffffff'; g.font = '24px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    g.fillText(performance.complete ? '거리 · 방향 · 자리 · 두 물체의 그림자가 오늘의 공연을 만들었어요' : '각 무대에서 완성한 그림자가 이곳에 모입니다', 600, 580);
+    performanceTexture.needsUpdate = true;
+  };
+  paintPerformance();
+  level.performance.panel = performancePanel;
+  level.performance.texture = performanceTexture;
+  level.performance.lamps = spotlights;
+  level.movers.push({ root: null, update(t) { spotlights.forEach((lamp, i) => { lamp.material.emissiveIntensity = performance.complete ? 0.65 + 0.35 * Math.sin(t * 2 + i) : 0.35; }); } });
+  finishPad(goal, -157);
   challengeStar(8, 1, -148);
   for (let i = 0; i < 8; i++) for (const side of [-1, 1]) {
     const curtain = new THREE.Mesh(new THREE.BoxGeometry(2, 18, 8), mat(0x783858)); curtain.position.set(side * 24, 3, -10 - i * 22); level.root.add(curtain);

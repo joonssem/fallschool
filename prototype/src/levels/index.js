@@ -12,6 +12,8 @@ import { buildGeometryLab } from './geometrylab.js';
 import { buildWindVillage } from './windvillage.js';
 import { buildShadowTheater } from './shadowtheater.js';
 import { buildRobotCity } from './robotcity.js';
+import { buildIceTaxi } from './icetaxi.js';
+import { buildEchoDetective } from './echodetective.js';
 
 // 맵 항목: id, name, build + (선택) subject(분류), blurb(한 줄 설명), coop(친구와 함께 해야 하는 장치가 있나)
 // 선택 화면은 subject 로 묶어 보여 준다. 적지 않으면 '기타'.
@@ -19,7 +21,7 @@ export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', subject: '연습', blurb: '이동·점프·다이브 연습, 기울어지는 시소', coop: true, build: buildLevel },
-  // 난이도 변형: 방 설정(meta)에 새 필드를 만들지 않고 맵 id로 단계를 고른다 (database.rules 변경 없음). docs/37
+  // 난이도 변형: 방 설정(meta)에 새 필드를 만들지 않고 맵 id로 단계를 고른다 (database.rules 변경 없음). docs/41
   { id: 'labeasy', name: '점프 연구소 시험장 (쉬움)', subject: '연습', blurb: '느리고 넓은 장애물로 연습해요', coop: true, build: (parent, world, opts) => buildLevel(parent, world, { ...opts, difficulty: 'easy' }) },
   { id: 'labhard', name: '점프 연구소 시험장 (어려움)', subject: '연습', blurb: '빠르고 좁은 장애물에 도전해요', coop: true, build: (parent, world, opts) => buildLevel(parent, world, { ...opts, difficulty: 'hard' }) },
   { id: 'solar', name: '태양계 중력 달리기', subject: '지구·우주', blurb: '행성마다 다른 중력으로 점프', build: buildSolar },
@@ -34,6 +36,8 @@ export const MAPS = [
   { id: 'windvillage', name: '바람마을', subject: '지구·우주', blurb: '바람 방향을 보고 순풍 길을 골라요', coop: false, build: buildWindVillage },
   { id: 'shadowtheater', name: '그림자 변신 극장', subject: '물리', blurb: '물체를 바꿔 그림자 공연을 만들어요', coop: false, build: buildShadowTheater },
   { id: 'robotcity', name: '명령 택배 로봇 도시', subject: '정보', blurb: '명령을 고쳐 배송하고 길을 열어요', coop: false, build: buildRobotCity },
+  { id: 'icetaxi', name: '열을 지키는 얼음 택배', subject: '물리', blurb: '포장과 길을 골라 얼음을 배달해요', coop: false, build: buildIceTaxi },
+  { id: 'echodetective', name: '메아리 탐정단', subject: '물리', blurb: '반사 신호로 동굴을 탐험해요', coop: false, build: buildEchoDetective },
 ];
 
 // 분류별로 묶기: [[분류, [맵…]], …] (SUBJECTS 순서, 모르는 분류는 뒤에)

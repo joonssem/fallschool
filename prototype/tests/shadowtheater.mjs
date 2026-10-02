@@ -30,6 +30,8 @@ for (const rotationY of [0, Math.PI / 6, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
   T.check(`회전 주기`, { ok: maskSimilarity(shadowMask([hull]), shadowMask([projectBox({ ...b, rotationY: rotationY + Math.PI * 2 })])) === 1, why: '' });
 }
 const m = make();
+const oversized = m.world.colliders.filter((c) => ![c.half.x, c.half.y, c.half.z].every(Number.isFinite) || Math.max(c.half.x, c.half.y, c.half.z) > 20);
+T.check('맵 장식 충돌체 크기 유효', { ok: oversized.length === 0, why: oversized.map((c) => `${c.object.position.x},${c.object.position.y},${c.object.position.z} / ${c.half.x},${c.half.y},${c.half.z} / ${c.object.geometry?.parameters?.width},${c.object.geometry?.parameters?.height},${c.object.geometry?.parameters?.depth}`).join('; ') });
 for (const [i, s] of m.level.theaters.entries()) {
   T.check(`초기 미완성`, { ok: !s.solved && s.similarity < 0.975 && s.door.userData.collider.enabled, why: '' });
   tap(m, s, action(s, 'submit'));
@@ -50,8 +52,10 @@ for (const [i, s] of m.level.theaters.entries()) {
   }
   tap(m, s, action(s, 'submit')); m.level.update(1, 1, null);
   T.check(`완성 후 문 열림`, { ok: s.solved && !s.door.userData.collider.enabled, why: '' });
+  T.check(`완성한 그림자가 공연에 기록`, { ok: m.level.performance.frames[i]?.length === s.objects.length && m.level.performance.completedCount === i + 1, why: '' });
   tap(m, s, action(s, 'clear'));
   T.check(`완성 경로 유지`, { ok: s.solved && !s.door.userData.collider.enabled && s.similarity < 0.975, why: '' });
+  T.check(`재실험해도 공연 기록 유지`, { ok: m.level.performance.frames[i]?.length === s.objects.length, why: '' });
 }
 m.level.resetProgress();
 T.check('전체 초기화', { ok: m.level.theaters.every((s) => !s.solved && s.attempts === 0 && s.selected === 0 && s.door.userData.collider.enabled), why: '' });
@@ -79,7 +83,8 @@ for (const seed of [1, 7, 99]) {
   targets.push([0, -157]);
   T.check(`걸어서 조작과 통과`, run(walk, [0, 0, 2], targets, { maxT: 200 }));
   T.check(`걸어서 무대 완성`, { ok: walk.level.theaters.every((state) => state.solved), why: '' });
+  T.check(`네 결과로 커튼콜 공연 완성`, { ok: walk.level.performance.complete && walk.level.performance.completedCount === 4 && walk.level.performance.frames.every(Boolean), why: '' });
   walk.level.setSeed(3);
-  T.check(`새 경기 초기화`, { ok: walk.level.theaters.every((state) => !state.solved), why: '' });
+  T.check(`새 경기 초기화`, { ok: walk.level.theaters.every((state) => !state.solved) && !walk.level.performance.complete && walk.level.performance.frames.every((frame) => frame === null), why: '' });
 }
 T.report();
