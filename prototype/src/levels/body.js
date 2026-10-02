@@ -3,6 +3,7 @@
 // 구간: 폐 → 심장 판막 → 동맥 → 모세혈관 → 근육
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, shuffleGates, sectionFinder } from './kit.js';
+import { dynamicSign } from './variants.js';
 
 const C = {
   floor: 0xf4e8e8,
@@ -88,6 +89,8 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   challengeStar(14, 1, -101);
   sign('모세혈관', -11, 5, -102, { width: 5, color: '#8f2937', lines: ['혈관이 가늘게 갈라져', '온몸에 산소를 나눠 줘요'], rotY: 0.4 });
 
+  const delivery = buildDelivery();
+
   // ─── 근육으로 산소 전달 ───────────────────────────────
   const musclePath = [
     [-3, 1, -110], [3, 1, -118], [-2, 1, -126],
@@ -128,7 +131,87 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
     shuffleGates(level, s);
   };
   level.setSeed(seed);
-  return finalizeLevel(level);
+  level.delivery = delivery; // 시험용
+  finalizeLevel(level);
+  const baseReset = level.resetProgress;
+  level.resetProgress = () => { baseReset(); delivery.reset(); };
+  return level;
+
+  // 산소 배달(선택): 모세혈관 옆 발판에 서면 파란 산소를 그 장기에 전달한다. 어느 장기에 줄지 고르고, 세 곳 모두에 주면 온몸에 전달 표시가 켜진다.
+  // 장기는 모두 산소가 필요하고, 쓰고 남은 이산화탄소는 혈액이 폐로 실어 간다(회색 알갱이). 어느 장기를 골라도 같은 과학이다.
+  // 기본 완주와 무관하고, 상태는 학생별이다. 심장·혈관의 흐름 순서는 이 활동에서 건드리지 않는다.
+  function buildDelivery() {
+    const ORGANS = [
+      { key: 'muscle', name: '근육', z: -98.5, color: 0xe9a76b, msg: '근육 세포가 산소로 에너지를 얻어 힘을 내요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
+      { key: 'brain', name: '뇌', z: -101, color: 0xf2a6c1, msg: '뇌 세포도 산소가 필요해요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
+      { key: 'stomach', name: '위', z: -103.5, color: 0xd98a6a, msg: '위와 소화 기관의 세포도 산소를 써요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
+    ];
+    const PX = -7.5, OX = -15;
+    const state = { done: {}, pads: [], organs: {}, grains: [], pulse: {} };
+    const status = dynamicSign(root, { x: -10.5, y: 8.2, z: -101, width: 6, rows: 2, rotY: 0.4, color: '#a22c3a' });
+    sign('산소 배달 (선택)', -10.2, 5.2, -95.2, { width: 5.4, color: '#2a9dba', lines: ['산소 배달 (선택)', '파란 산소를 어디에 줄까요?', '발판에 서면 배달돼요 · 안 해도 돼요'], rotY: 0.4 });
+    ORGANS.forEach((o, i) => {
+      const material = new THREE.MeshStandardMaterial({ color: 0xcfe8f0, roughness: 0.55 });
+      const mesh = platform(PX, Y - 0.35, o.z, 2, 2, 0xcfe8f0, { material }); // 발판 윗면 높이 1.15 (모세혈관 바닥 1.0 + 0.15)
+      mesh.position.y = 0.65;
+      mesh.userData.collider.sync(true);
+      sign(o.name, PX, 2.6, o.z - 0.1, { width: 2.2, color: '#2b2d42' });
+      const organ = new THREE.Mesh(
+        o.key === 'brain' ? new THREE.SphereGeometry(1.15, 14, 10) : o.key === 'stomach' ? new THREE.CapsuleGeometry(0.7, 1.2, 4, 10) : new THREE.CapsuleGeometry(0.6, 1.6, 4, 10),
+        new THREE.MeshStandardMaterial({ color: o.color, roughness: 0.6, emissive: 0xffc15e, emissiveIntensity: 0 }),
+      );
+      organ.position.set(OX, 2.2, o.z);
+      if (o.key !== 'brain') organ.rotation.z = Math.PI / 2;
+      if (o.key === 'stomach') organ.rotation.set(0, 0, 0.9);
+      root.add(organ);
+      state.organs[o.key] = organ;
+      state.pads.push({ o, mesh, occupied: false });
+      for (let k = 0; k < 3; k++) { // 이산화탄소 알갱이: 배달 뒤 장기에서 폐 쪽(뒤쪽)으로 흘러간다
+        const grain = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), mat(0x8d99ae, { emissive: 0x3d4457, emissiveIntensity: 0.25 }));
+        grain.visible = false;
+        root.add(grain);
+        state.grains.push({ grain, o, phase: k / 3 });
+      }
+    });
+    const count = () => Object.keys(state.done).length;
+    function paint() {
+      const n = count();
+      status.set(n === ORGANS.length ? ['온몸에 산소 전달 완료!', '모든 세포가 산소를 써요'] : ['산소 배달', `${n} / ${ORGANS.length} 곳에 전달했어요`], n === ORGANS.length ? '#2a9d8f' : '#a22c3a');
+      state.pads.forEach((p) => p.mesh.material.color.setHex(state.done[p.o.key] ? 0x80ed99 : 0xcfe8f0));
+    }
+    movers.push({ root: null, update(t, dt, player) {
+      const pos = player?.pos;
+      for (const pad of state.pads) {
+        const on = !!pos && Math.abs(pos.x - PX) < 1.2 && Math.abs(pos.z - pad.o.z) < 1.2 && pos.y > 0.8 && pos.y < 2.4;
+        if (on && !pad.occupied) {
+          const first = !state.done[pad.o.key];
+          state.done[pad.o.key] = true;
+          state.pulse[pad.o.key] = t;
+          paint();
+          level.onMessage?.(first ? `${pad.o.msg}${count() === ORGANS.length ? ' 온몸에 산소를 전달했어요!' : ''}` : `${pad.o.name}에 또 전달했어요. ${pad.o.msg}`, true);
+        }
+        pad.occupied = on;
+      }
+      for (const [key, organ] of Object.entries(state.organs)) {
+        const since = t - (state.pulse[key] ?? -99);
+        const glow = state.done[key] ? 0.35 + (since < 1 ? (1 - since) * 0.6 : 0) + Math.max(0, Math.sin(t * 3)) * 0.15 : 0;
+        organ.material.emissiveIntensity = glow;
+        const s = 1 + (since < 0.6 ? Math.sin(since / 0.6 * Math.PI) * 0.18 : 0);
+        organ.scale.setScalar(s);
+      }
+      for (const g of state.grains) {
+        g.grain.visible = !!state.done[g.o.key];
+        if (!g.grain.visible) continue;
+        const k = (t * 0.35 + g.phase) % 1;
+        g.grain.position.set(OX + 1.2 + k * 3, 2.2 + k * 0.8, g.o.z + k * 6.5); // 폐 쪽(뒤쪽, +z)으로 흘러간다
+        g.grain.material.opacity = 1;
+      }
+    } });
+    state.reset = () => { state.done = {}; state.pulse = {}; state.pads.forEach((p) => { p.occupied = false; }); paint(); };
+    state.reset();
+    return state;
+  }
+
 
   function valveDoor({ z, y, plates: positions, message }) {
     const width = 22;

@@ -37,4 +37,17 @@ for (const seed of [1, 2, 3, 4, 5]) for (const t0 of [0, 1.7, 3.3, 5, 7.1, 9]) {
     T.check('순환 마무리 틀린 문은 떨어짐', { ok: !r2.ok && r2.why.startsWith('떨어짐'), why: '떨어지지 않음' });
   }
 }
+
+// 인체 산소 배달(선택): 세 발판을 밟으면 각 장기에 전달되고, 길(근육 발판)은 배달과 무관하게 열려 있다 (위 검사)
+if (map === 'body') for (const seed of [1, 2, 3]) {
+  const m = make(seed);
+  const d = m.level.delivery;
+  T.check('누르기 전엔 배달 없음', { ok: Object.keys(d.done).length === 0, why: JSON.stringify(d.done) });
+  const walk = run(m, [0, 1, -98], [[0, -102], [-3, -110]], {});
+  T.check('기본 길을 지나가도 발판이 밟히지 않음', { ok: walk.ok && Object.keys(d.done).length === 0, why: walk.why || '길을 지나다 배달됨' });
+  T.check('세 장기에 차례로 배달', run(m, [-3, 1, -98], [[-7.5, -98.5], [-7.5, -101], [-7.5, -103.5]], {}));
+  T.check('세 곳 모두 전달됨', { ok: ['muscle', 'brain', 'stomach'].every((k) => d.done[k]), why: JSON.stringify(d.done) });
+  m.level.resetProgress();
+  T.check('진행 초기화하면 배달도 처음으로', { ok: Object.keys(d.done).length === 0, why: JSON.stringify(d.done) });
+}
 T.report();
