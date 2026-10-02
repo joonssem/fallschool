@@ -33,4 +33,23 @@ for (const seed of [1, 2, 3, 4, 5, 6]) {
   m.level.resetProgress();
   T.check('진행 초기화하면 장치도 처음으로', { ok: b.sel === null && b.shownVol === 12 && m.level.stars.every((s) => !s.got), why: `sel=${b.sel}` });
 }
+
+// 선택 도전 물에 띄워 보기: 뜨는 물체 3개로 별까지 건너고, 가라앉는 물체는 징검다리가 되지 않는다
+const P = { wood: [9.5, -81.4], cork: [11.8, -81.4], foam: [14.1, -81.4], iron: [16.4, -81.4], rock: [18.7, -81.4], reset: [21, -81.4] };
+for (const seed of [1, 2, 3]) for (const t0 of [0, 2.5]) {
+  const m = make(seed);
+  const fb = m.level.floatBench;
+  const count = () => fb.stones.filter((s) => s.key).length;
+  T.check('처음엔 징검다리 없음', { ok: count() === 0, why: String(count()) });
+  T.check('쇠 구슬 넣기 (물체 발판 앞 길로 걸어가서)', run(m, [6, 1.5, -74], [[9, -78], [16.4, -78], P.iron], { t0 }));
+  T.check('가라앉는 물체는 징검다리가 되지 않음', { ok: count() === 0, why: String(count()) });
+  T.check('나무·코르크·스티로폼 넣기', run(m, [P.iron[0], 2.65, P.iron[1]], [P.foam, P.cork, P.wood], { t0 }));
+  T.check('뜨는 세 물체로 징검다리 세 칸', { ok: count() === 3, why: String(count()) });
+  T.check('징검다리로 별까지 건넘', run(m, [P.wood[0], 2.65, P.wood[1]], [[13, -82.2], [15, -84], [15, -88.5], [15, -94], [15, -99.5], [15, -105.8]], { t0, maxT: 30 }));
+  T.check('별을 얻음', { ok: m.level.stars.find((st) => Math.abs(st.mesh.position.x - 15) < 0.1 && st.mesh.position.z < -105).got, why: '미획득' });
+  m.level.resetProgress();
+  T.check('진행 초기화하면 물통이 비워짐', { ok: count() === 0 && m.level.stars.every((st) => !st.got), why: String(count()) });
+  const blocked = run(make(seed), [15, 2.5, -82.5], [[15, -88.5], [15, -94], [15, -105.8]], { t0, maxT: 20 });
+  T.check('징검다리 없이는 물통을 건너지 못함(떨어져 다시 시작)', { ok: !blocked.ok, why: '징검다리 없이 건넘' });
+}
 T.report();

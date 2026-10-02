@@ -108,6 +108,7 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
     });
   });
   const airBench = buildAirBench();
+  const floatBench = buildFloatBench();
   const cp1 = platform(0, Y, -74, 16, 10, C.checkpoint);
   checkpoint(cp1, new THREE.Vector3(0, Y, -71), '액체 실험대');
   challengeStar(12.5, Y, -74);
@@ -164,7 +165,7 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
 
   // 거대 비커·시험관·피스톤 장식은 충돌하지 않는다.
   glassware(-17, -5, -50, 5, 16, 0x80ed99);
-  glassware(18, -7, -73, 7, 19, 0x4cc9f0);
+  glassware(27, -7, -60, 7, 19, 0x4cc9f0);
   testTube(-13, -2, -112);
 
   level.setSeed = (s) => {
@@ -175,9 +176,90 @@ export function buildGiantLab(parent, world, { seed = Date.now() } = {}) {
   level.setSeed(seed);
   finalizeLevel(level);
   level.airBench = airBench; // 시험용
+  level.floatBench = floatBench;
   const baseReset = level.resetProgress;
-  level.resetProgress = () => { baseReset(); airBench.reset(); };
+  level.resetProgress = () => { baseReset(); airBench.reset(); floatBench.reset(); };
   return level;
+
+  // ─── 선택 도전: 물에 띄워 보기 ───────────────────────
+  // 물체를 골라 물통에 넣으면 뜨는 것은 징검다리가 되고 가라앉는 것은 바닥으로 간다. 뜨는 물체 3개로 별까지 건널 수 있다.
+  // 과학 범위: 물체마다 물에 뜨는지 가라앉는지가 다르다는 것까지(밀도·부력 크기 식은 쓰지 않는다). 기본 완주와 무관하고 상태는 학생별이다.
+  function buildFloatBench() {
+    const OBJECTS = [
+      { key: 'wood', name: '나무 블록', floats: true, color: 0xb5835a, x: 9.5, z: -81.4 },
+      { key: 'cork', name: '코르크 마개', floats: true, color: 0xd9b382, x: 11.8, z: -81.4 },
+      { key: 'foam', name: '스티로폼', floats: true, color: 0xf4f4f0, x: 14.1, z: -81.4 },
+      { key: 'iron', name: '쇠 구슬', floats: false, color: 0x6b7280, x: 16.4, z: -81.4 },
+      { key: 'rock', name: '돌', floats: false, color: 0x8d8a85, x: 18.7, z: -81.4 },
+    ];
+    const RESET = { x: 21, z: -81.4 };
+    const SLOTS = [-88.5, -94, -99.5], TX = 15, WATER = 2.0;
+    const state = { stones: [], pads: [], sunk: [], placed: [] };
+    platform(14.5, 2.5, -80, 15, 6, C.floor);
+    sign("물에 띄워 보기 · 선택 도전", 20, 6.2, -77.2, { width: 6, color: '#168aad', lines: ['물에 띄워 보기 (선택)', '뜨는 물체로 징검다리를 만들어요', '별까지 건너 볼까요? 안 해도 돼요'], rotY: -0.5 });
+    // 물통(장식): 떨어져도 안전하게 이전 체크포인트에서 다시 시작한다
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 19), new THREE.MeshStandardMaterial({ color: 0x4cc9f0, transparent: true, opacity: 0.45, roughness: 0.2 }));
+    tank.position.set(TX, WATER - 1.7, -96);
+    root.add(tank);
+    function makePad(x, z, name, color, reset = false) {
+      const material = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+      const mesh = platform(x, 2.65, z, 2, 2, color, { material });
+      sign(name, x, 4.3, z - 0.2, { width: 2.4, color: '#2b2d42' });
+      return { x, z, mesh, occupied: false, reset };
+    }
+    OBJECTS.forEach((o) => state.pads.push({ ...makePad(o.x, o.z, o.name, o.color), o }));
+    state.pads.push(makePad(RESET.x, RESET.z, '물통 비우기', 0xffd166, true));
+    SLOTS.forEach((z, i) => {
+      const stone = platform(TX, WATER, z, 3, 3, 0xffffff, { dynamic: true, castShadow: true, thick: 0.4, material: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }) });
+      stone.visible = false;
+      stone.userData.collider.enabled = false;
+      state.stones.push({ mesh: stone, z, key: null });
+      movers.push({ root: stone, update(t) { stone.position.y = WATER - 0.2 + Math.sin(t * 1.4 + i * 1.9) * 0.06; } });
+    });
+    challengeStar(TX, 2.5, -105.8);
+    const sinkGeo = new THREE.SphereGeometry(0.5, 12, 8);
+    function drop(o, t) {
+      const slot = state.stones.findIndex((s) => !s.key);
+      if (slot < 0) return level.onMessage?.('징검다리 세 칸이 모두 찼어요. 건너가 보거나 물통을 비워요.', true);
+      if (o.floats) {
+        const st = state.stones[slot];
+        st.key = o.key;
+        st.mesh.visible = true;
+        st.mesh.material.color.setHex(o.color);
+        st.mesh.userData.collider.enabled = true;
+        level.onMessage?.(`${o.name}은(는) 물에 떠요! ${slot + 1}번째 징검다리가 생겼어요${state.stones.every((s) => s.key) ? '. 별까지 건널 수 있어요' : ''}.`, true);
+      } else {
+        const ball = new THREE.Mesh(sinkGeo, new THREE.MeshStandardMaterial({ color: o.color }));
+        ball.position.set(TX, WATER + 0.6, SLOTS[slot]);
+        root.add(ball);
+        state.sunk.push({ ball, t0: t });
+        level.onMessage?.(`${o.name}은(는) 물에 가라앉아요. 물체마다 뜨는지 가라앉는지가 달라요. 다른 물체도 넣어 봐요.`, false);
+      }
+    }
+    function clear() {
+      state.stones.forEach((s) => { s.key = null; s.mesh.visible = false; s.mesh.userData.collider.enabled = false; });
+      state.sunk.forEach(({ ball }) => root.remove(ball));
+      state.sunk.length = 0;
+    }
+    movers.push({ root: null, update(t, dt, player) {
+      const p = player?.pos;
+      for (const pad of state.pads) {
+        const on = !!p && Math.abs(p.x - pad.x) < 1.2 && Math.abs(p.z - pad.z) < 1.2 && p.y > 2.3 && p.y < 3.8;
+        if (on && !pad.occupied) {
+          if (pad.reset) { clear(); level.onMessage?.('물통을 비웠어요. 다른 물체를 골라 봐요.', true); } else drop(pad.o, t);
+        }
+        pad.occupied = on;
+      }
+      for (let i = state.sunk.length - 1; i >= 0; i--) { // 가라앉는 구슬은 바닥까지 내려갔다 사라진다
+        const s = state.sunk[i];
+        const k = (t - s.t0) / 1.2;
+        s.ball.position.y = WATER + 0.6 - Math.min(k, 1) * 2.4;
+        if (k > 2) { root.remove(s.ball); state.sunk.splice(i, 1); }
+      }
+    } });
+    state.reset = clear;
+    return state;
+  }
 
   // ─── 선택 도전: 공기 실험대 ──────────────────────────
   // 힘을 골라 공기를 누르면 부피(칸, 모형)가 바뀌고, 목표 부피와 같으면 문이 열려 별로 간다.
