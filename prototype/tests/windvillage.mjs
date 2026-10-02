@@ -1,4 +1,4 @@
-import { THREE, PhysicsWorld, run, tally } from './harness.mjs';
+import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
 import { buildWindVillage, BREEZE_PERIOD } from '../src/levels/windvillage.js';
 const T = tally('바람마을');
 function build(seed = 1) { const world = new PhysicsWorld(); return { world, level: buildWindVillage(new THREE.Scene(), world, { seed }) }; }
@@ -28,4 +28,34 @@ for (const seed of [1, 7, 99]) for (const t0 of [0, 8, 16, 24]) for (const side 
   const route = [[0, -29], [side, -33], [side, -49], [side, -66], [0, -70], [0, -90], [0, -96], [0, -103], [-8, -108], [9, -110], [9, -120], [-9, -126], [-9, -138], [0, -148], [0, -160]];
   T.check(`전 구간 ${side < 0 ? '순풍' : '역풍'} seed=${seed} t=${t0}`, run(build(seed), [0, 0, 2], route, { t0, maxT: 120 }));
 }
+
+// 순풍 도약(선택): 바람이 있어야 섬에 닿고, 못 닿아도 아래 길로 내려앉아 떨어지지 않는다. 도약대 옆으로 지나가는 길도 막히지 않는다.
+function tailwindJump(windOn, takeoffZ, seed = 1) {
+  const mm = build(seed);
+  if (!windOn) mm.level.windAt = () => {};
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(-7, 0, -34.5), 0);
+  let t = 0, jumped = false;
+  for (let i = 0; i < 1500; i++) {
+    mm.level.update(t, S, p);
+    if (!jumped && p.pos.z < takeoffZ) { p.requestJump(); jumped = true; }
+    p.step(S, { x: 0, y: 1 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt);
+    if (jumped && p.grounded && p.pos.z < -44.2) {
+      const onIsland = p.pos.y > 1, y = p.pos.y;
+      for (let k = 0; k < 200 && onIsland; k++) { // 섬에 내리면 별 쪽으로 걸어간다
+        mm.level.update(t, S, p); p.step(S, { x: 0, y: p.pos.z > -53.3 ? 1 : 0 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt); t += S;
+      }
+      return { onIsland, y, star: mm.level.stars.some((s) => s.got) };
+    }
+    if (p.pos.y < -10) return { onIsland: false, y: p.pos.y, fell: true };
+    t += S;
+  }
+  return { onIsland: false, y: NaN, stuck: true };
+}
+for (const tz of [-43.4, -43.8, -44.0]) {
+  const w = tailwindJump(true, tz), n = tailwindJump(false, tz);
+  T.check(`순풍을 타면 섬에 닿고 별을 얻음 (도약 z=${tz})`, { ok: w.onIsland && w.star, why: JSON.stringify(w) });
+  T.check(`바람이 없으면 닿지 않고 길로 내려앉음 (도약 z=${tz})`, { ok: !n.onIsland && !n.fell && Math.abs(n.y) < 0.1, why: JSON.stringify(n) });
+}
+for (const x of [-9.8, -4.6]) T.check(`도약대 옆 길로 지나감 x=${x}`, run(build(), [0, 0, -29], [[x, -33], [x, -49], [x, -66]], { maxT: 40 }));
 T.report();

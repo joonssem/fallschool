@@ -15,7 +15,7 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     ]),
     sky: { background: 0xc7e8f4, fog: [0xc7e8f4, 85, 210], hemi: 1.5 },
   });
-  const { platform, block, sign, checkpoint, startCheckpoint, finishPad, challengeStar, mat } = makeKit(level);
+  const { platform, block, ramp, sign, checkpoint, startCheckpoint, finishPad, challengeStar, mat } = makeKit(level);
   let time = 0;
   const zones = [];
   const gauges = [];
@@ -89,6 +89,7 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     marker(forward ? 'L 저기압' : 'H 고기압', x, 3, -60, forward ? '#2467a3' : '#a64d41');
     gauge(x, 1.2, -49, field);
   }
+  buildTailwindJump();
   road(0, 0, -67, 26, 10);
   sign('바람 세기', 10, 3.5, -66, { width: 5, lines: ['압력이 가파르게 변하는 곳', '바람이 더 세게 불어요'] });
 
@@ -149,6 +150,19 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     const roof = new THREE.Mesh(new THREE.ConeGeometry(4.2, 2.7, 4), mat(0xc9846f));
     house.position.set(side * 23, 0, 5 - i * 22); roof.position.copy(house.position).add(new THREE.Vector3(0, 3.3, 0)); roof.rotation.y = Math.PI / 4;
     level.root.add(house, roof);
+  }
+
+  // 순풍 도약(선택): 왼쪽 순풍 길 한가운데의 도약대에서 앞의 섬으로 뛴다. 틈은 바람 없이는 닿지 않고
+  // 순풍을 타면 닿는다. 섬은 길 위(높이 1.5)라 실패해도 아래 길에 안전하게 내려앉는다. 역풍 길에는 두지 않았다.
+  function buildTailwindJump() {
+    const x = -7, deckZ = -42.75, islandZ = -53.3;
+    sign('바람 도약대 (선택)', x - 3.3, 3.6, -45, { width: 4.6, color: '#2467a3', lines: ['바람 도약대 (선택)', '순풍을 타고 멀리 뛰어 별까지!', '못 닿아도 길로 안전하게 내려와요'], rotY: 0.5 });
+    ramp(x, -36, 0, -41.5, 3, 2.4, 0xbce5cf);
+    platform(x, 3, deckZ, 2.4, 2.5, 0xe6f4ea); // 높은 도약대: 내려 뛰어 공중에 오래 떠 있어야 바람이 더 크게 작용한다
+    platform(x, 1.5, islandZ, 3.6, 4, 0xe6f4ea);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), mat(0xffd60a, { emissive: 0xffb703, emissiveIntensity: 0.8 }));
+    star.position.set(x, 2.9, islandZ); star.castShadow = true; level.root.add(star);
+    level.stars.push({ mesh: star, got: false });
   }
 
   // 압력의 같은 음의 기울기가 화살표·풍향계·깃발·입자를 움직인다.
