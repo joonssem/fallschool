@@ -14,7 +14,27 @@ const C = {
   checkpoint: 0x9be564,
   cave: 0x6d6875,
   soil: 0x9c6644,
+  sunny: 0xffd166,
+  shade: 0x7d8a99,
 };
+
+// 선택 지름길 "증발 상승기": 햇빛 아래(따뜻함)는 빨리, 그늘은 느리게 올라간다. 게임에서의 속도 차이는 과장이다.
+// 위치는 시간 t로만 정해져 모든 화면에서 같다. 학생이 서 있는 곳과 무관하게 계산한다(서로 방해하지 않는다).
+export const EVAP_LIFTS = {
+  sun: { x: 12, rise: 3, top: 1, bottom: 2 }, // 오르는 데 3초, 위에서 1초·아래에서 2초 머문다 (주기 9초)
+  shade: { x: -12, rise: 8, top: 1.5, bottom: 2 }, // 주기 19.5초
+};
+export const EVAP_BOTTOM = 1.5;
+export const EVAP_TOP = 7.5;
+/** 상승기 높이 비율 0(아래)~1(위). 아래에서 bottom초 머문 뒤 rise초 동안 오르고, top초 머문 뒤 rise초 동안 내려온다 */
+export function liftFraction({ rise, top, bottom }, t) {
+  const P = 2 * rise + top + bottom;
+  const u = ((t % P) + P) % P;
+  if (u < bottom) return 0;
+  if (u < bottom + rise) return (u - bottom) / rise;
+  if (u < bottom + rise + top) return 1;
+  return 1 - (u - bottom - rise - top) / rise;
+}
 
 const SECTIONS = [
   { name: '바다와 증발', zMax: Infinity },
@@ -58,6 +78,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   sign('증발', -8, 5, -18, { width: 5, color: '#e76f51', lines: ['증발', '물이 눈에 보이지 않는 기체,', '수증기가 되어 올라가요'], rotY: 0.4 });
   sun(18, 14, -21);
   steamDots();
+  buildEvapLifts();
 
   // 구름 속 응결: 공기가 식으면 수증기가 작은 물방울이 된다.
   const cloudPad = platform(0, Y + 6, -43, 16, 10, C.cloud);
@@ -159,6 +180,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     shuffleGates(level, s);
   };
   level.setSeed(seed);
+  level.evapLifts = EVAP_LIFTS; // 시험용
   return finalizeLevel(level);
 
   // 수증기는 눈에 보이지 않는 기체다: 아주 희미한 작은 점으로만 그려 위로 올라가게 한다 (안내판: "점으로 표시")
@@ -194,6 +216,52 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
       drops.push(m);
     }
     movers.push({ root: null, update(t) { drops.forEach((m, i) => { m.position.y += Math.sin(t * 1.3 + i) * 0.003; }); } });
+  }
+
+  // 증발 상승기: 계단과 별개의 선택 지름길. 안 타도 계단으로 구름에 갈 수 있다.
+  function buildEvapLifts() {
+    for (const [kind, cfg] of Object.entries(EVAP_LIFTS)) {
+      const sunny = kind === 'sun';
+      const x = cfg.x, dir = Math.sign(x);
+      const color = sunny ? C.sunny : C.shade;
+      platform(x, 1.5, -9, 6, 6, color); // 아래 승강장
+      const lift = platform(x, EVAP_BOTTOM, -14.3, 5, 4.6, sunny ? 0xffb703 : 0x5d6b7a, { dynamic: true, castShadow: true });
+      // 신호등: 초록 = 아래에 와 있어 탈 수 있다. 빨강 = 움직이는 중이라 기다린다 (틈으로 떨어져도 안전하게 다시 시작할 뿐이다)
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), new THREE.MeshBasicMaterial({ color: 0xef476f }));
+      lamp.position.set(x, 5, -11.6);
+      root.add(lamp);
+      movers.push({ root: lift, update(t) {
+        const f = liftFraction(cfg, t);
+        lift.position.y = EVAP_BOTTOM - 0.5 + f * (EVAP_TOP - EVAP_BOTTOM);
+        lamp.material.color.setHex(f < 0.02 ? 0x2ec4b6 : 0xef476f);
+      } });
+      platform(x, EVAP_TOP, -24, 6, 14, color); // 위 통로: 계단 끝 발판과 이어진다
+      platform(x - dir * 4, EVAP_TOP, -32, 8, 6, color);
+      challengeStar(x + dir * 5.5, EVAP_TOP, -24); // 상승기를 탄 학생만 쉽게 닿는 별 (계단 길과 무관한 선택 보상)
+      sign(sunny ? '햇빛 아래 상승기' : '그늘 상승기', x + dir * 1.2, 4.8, -9, {
+        width: 5.2, color: sunny ? '#e76f51' : '#4a5a6a', rotY: -dir * 0.45,
+        lines: sunny
+          ? ['햇빛 아래 상승기 (선택)', '따뜻하면 증발이 활발해요', '초록 불일 때 타요 (게임에서는 더 빨라요)']
+          : ['그늘 상승기 (선택)', '덜 따뜻하면 증발이 느려요', '초록 불일 때 타요 · 계단도 있어요'],
+      });
+      // 위로 올라가는 희미한 수증기 점: 햇빛 쪽이 더 많고 빠르다 (수증기는 눈에 보이지 않는다: 점은 표시일 뿐)
+      const n = sunny ? 10 : 4;
+      const dots = [];
+      for (let i = 0; i < n; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 }));
+        root.add(m);
+        dots.push({ m, ox: ((i * 7) % 5 - 2) * 0.8, oz: ((i * 3) % 5 - 2) * 0.8, phase: i / n });
+      }
+      const speed = sunny ? 0.45 : 0.15;
+      movers.push({ root: null, update(t) {
+        for (const d of dots) {
+          const k = (t * speed + d.phase) % 1;
+          d.m.position.set(x + d.ox, 2 + k * 8, -14.5 + d.oz);
+          d.m.material.opacity = 0.25 * Math.sin(k * Math.PI);
+        }
+      } });
+    }
+    cloudPuffs(-12, 11, -14, 4); // 그늘 쪽 구름
   }
 
   function sun(x, y, z) {
