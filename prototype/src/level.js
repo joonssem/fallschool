@@ -1,5 +1,8 @@
 // 맵 1: 장애물 코스 "점프 연구소 시험장"
-// 구간: 출발 → 몸풀기 계단 → 숨은 발판 → 회전 막대 광장 → 움직이는 발판·바람 다리 → 시소 다리 → 골인 언덕
+// 구간: 출발 → 몸풀기 계단 → 숨은 발판 → 회전 막대 광장 → 움직이는 발판·바람 다리 → 시소 다리
+//       → (2부 시험 구간) 좁은 평균대 → 징검다리 → 사라지는 발판 → 컨베이어 → 얼음 판 → 점프 패드 탑 → 해머 복도 → 맞바람 → 골인 언덕
+// 2026-10-02: 이 맵을 "게임성 시험 맵"으로 쓴다. 학생이 쉬는 시간에 혼자 연습하는 맵이라 난이도를 올리고 장애물을 다양하게 시험한다.
+// 구간마다 이름(난이도 ★)이 달라 교사 화면의 구간별 낙하 횟수로 어느 장애물이 어려운지 볼 수 있다. docs/31 참고.
 import * as THREE from 'three';
 import { mulberry32, sectionFinder, createLevel, makeKit, finalizeLevel } from './levels/kit.js';
 
@@ -30,7 +33,6 @@ export const SECTIONS = [
   { name: '움직이는 발판', zMax: -108 },
   { name: '바람 다리', zMax: -147 },
   { name: '시소 다리', zMax: -175 },
-  { name: '골인 언덕', zMax: -221.7 },
 ];
 
 export function buildLevel(parent, world, { seed = Date.now() } = {}) {
@@ -192,8 +194,8 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
       },
     });
   }
-  sweeper(-89, 1.2, 5.3, 2.5, COLORS.bar);
-  sweeper(-101, -0.9, 6.95, 3.2, 0x8338ec);
+  sweeper(-89, 1.5, 5.3, 2.5, COLORS.bar); // 2026-10-02 난이도 상향: 회전 속도 1.2→1.5, 0.9→1.15
+  sweeper(-101, -1.15, 6.95, 3.2, 0x8338ec);
 
   // ─── 체크포인트 3 + 움직이는 발판 ───────────────────────
   const cp3 = platform(0, 5, -112, 12, 8, COLORS.checkpoint);
@@ -205,7 +207,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     movers.push({
       root: m,
       update(t) {
-        m.position.x = Math.sin(t * 0.8 + phase) * 3.5;
+        m.position.x = Math.sin(t * 1.0 + phase) * 3.5; // 속도 0.8→1.0 (난이도 상향)
       },
     });
   }
@@ -215,7 +217,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     movers.push({
       root: m,
       update(t) {
-        m.position.y = baseY + Math.sin(t * 1.3 - i * 1.1) * 1.2;
+        m.position.y = baseY + Math.sin(t * 1.6 - i * 1.1) * 1.2; // 속도 1.3→1.6 (난이도 상향)
       },
     });
   });
@@ -289,7 +291,7 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
       }
     },
   });
-  const WIND_SPEED = 3.6;
+  const WIND_SPEED = 4.2; // 3.6→4.2 (난이도 상향)
   level.windAt = (pos, out) => {
     for (const zone of level.fanZones) {
       if (zone.strength <= 0) continue;
@@ -316,14 +318,226 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
   platform(0, 5, -203.5, 5, 7.8, COLORS.bridge);
   seesaw(-214.7);
 
+  // ═══ 2부: 시험 구간 ═══════════════════════════════════
+  // 장애물 종류마다 구간을 나눠 이름에 난이도(★)를 붙였다. 탈락은 없고 떨어지면 구간 앞 체크포인트로 돌아온다.
+  // 움직이는 장애물은 모두 시간 t(방에서는 서버 시계)로 계산해 모든 화면이 같다.
+  const ext = []; // 2부 구간 표
+  let zc = -222.3; // 다음 구간이 시작하는 z
+  const extStart = (name) => ext.push({ name, zMax: zc });
+  const extSign = (text, w = 9) => sign(text, 0, 10.5, zc - 0.8, { width: w });
+  function stage(label, len = 9) { // 체크포인트 발판
+    const z = zc - len / 2;
+    const p = platform(0, 5, z, 12, len, COLORS.checkpoint);
+    checkpoint(p, new THREE.Vector3(0, 5, z), label);
+    zc -= len;
+  }
+  const extWind = []; // (pos, out, t) 함수들: 컨베이어·맞바람
+  const gust = (t, calm, ramp, strong, fade) => { // 0~1 세기의 반복 파형
+    const P = calm + ramp + strong + fade;
+    const c = ((t % P) + P) % P;
+    if (c < calm) return 0;
+    if (c < calm + ramp) return (c - calm) / ramp;
+    if (c < calm + ramp + strong) return 1;
+    return 1 - (c - calm - ramp - strong) / fade;
+  };
+
+  extStart('시험장 입구');
+  stage('시험장 입구', 10);
+  sign('여기부터 시험 구간 (난이도 ★)', 0, 11, -226.4, { width: 9, color: '#e76f51' });
+  sign('어려우면 쉬었다 가도 돼요', 0, 8.6, -226.4, { width: 7, color: '#6a4c93' });
+
+  // 1) 좁은 평균대: 폭이 줄어드는 외길
+  extStart('좁은 평균대 ★');
+  extSign('좁은 평균대: 곧게 걸어라');
+  for (const [w, len] of [[2.4, 6], [1.8, 6], [1.4, 6], [1.0, 6]]) {
+    platform(0, 5, zc - len / 2, w, len, COLORS.bridge);
+    zc -= len;
+  }
+  stage('평균대 뒤');
+
+  // 2) 징검다리: 틈이 점점 벌어진다 (마지막은 달려서 뛰어야 한다)
+  extStart('징검다리 ★★');
+  extSign('징검다리: 틈이 점점 벌어진다');
+  const GAPS = [2.4, 3.0, 3.6, 4.1, 4.6]; // 마지막 틈은 발판 가장자리 가까이에서 뛰어야 닿는다
+  const STONE_X = [0, 1, -1, 1, 0];
+  platform(0, 5, zc - 1.7, 3.4, 3.4, COLORS.step);
+  zc -= 3.4;
+  GAPS.forEach((g, i) => {
+    zc -= g;
+    platform(STONE_X[i], 5, zc - 1.7, 3.4, 3.4, i % 2 ? COLORS.step : COLORS.step2);
+    if (i === 2) challengeStar(10.5, 5, zc - 1.7); // 점프 + 다이브로 닿는 거리
+    zc -= 3.4;
+  });
+  zc -= 3.4; // 마지막 징검다리와 체크포인트 사이 틈 (3.4)
+  stage('징검다리 뒤');
+
+  // 3) 사라지는 발판: 깜빡이면 곧 사라진다
+  extStart('사라지는 발판 ★★');
+  extSign('사라지는 발판: 깜빡이면 곧 사라져요');
+  const BLINK = { P: 4.4, vis: 3.6, warn: 0.9 };
+  const blinkTiles = [];
+  for (let r = 0; r < 7; r++) for (let c = 0; c < 3; c++) {
+    const mesh = block((c - 1) * 3.5, 5, zc - 1.75 - r * 3.5, 3.1, 0.6, 3.1, 0, {
+      material: new THREE.MeshStandardMaterial({ color: 0x9ad1f5, roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0 }),
+    });
+    blinkTiles.push({ mesh, row: r, col: c, phase: (r * 1.1 + c * 1.5) % BLINK.P });
+  }
+  const blinkState = (phase, t) => { // 0 보임, 1 경고(깜빡임), 2 사라짐
+    const u = (((t + phase) % BLINK.P) + BLINK.P) % BLINK.P;
+    if (u < BLINK.vis - BLINK.warn) return 0;
+    return u < BLINK.vis ? 1 : 2;
+  };
+  level.blinkTiles = blinkTiles;
+  level.blinkState = blinkState;
+  movers.push({ root: null, update(t) {
+    for (const b of blinkTiles) {
+      const st = blinkState(b.phase, t);
+      b.mesh.visible = st !== 2;
+      b.mesh.userData.collider.enabled = st !== 2;
+      b.mesh.material.emissiveIntensity = st === 1 ? (Math.sin(t * 28) > 0 ? 0.55 : 0) : 0;
+    }
+  } });
+  zc -= 7 * 3.5;
+  stage('사라지는 발판 뒤');
+
+  // 4) 컨베이어: 바닥이 밀어 준다 (점프하면 벗어난다)
+  extStart('컨베이어 ★★');
+  extSign('컨베이어: 화살표 방향으로 바닥이 움직여요');
+  const BELTS = [{ dx: 0, dz: 1, speed: 3.2 }, { dx: 1, dz: 0, speed: 3.4 }, { dx: 0, dz: 1, speed: 4.2 }];
+  const beltZones = [];
+  BELTS.forEach((b, i) => {
+    const top = zc;
+    platform(0, 5, top - 5, 10, 10, i % 2 ? 0x59606b : 0x6b7280);
+    const zone = { ...b, zMin: top - 10, zMax: top, xMin: -5, xMax: 5 };
+    beltZones.push(zone);
+    const chevrons = [];
+    for (let k = 0; k < 6; k++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(b.dx ? 1.4 : 3.4, 0.06, b.dx ? 3.4 : 1.0), mat(0xffd166));
+      m.position.y = 5.04;
+      scene.add(m);
+      chevrons.push({ m, k });
+    }
+    movers.push({ root: null, update(t) {
+      for (const { m, k } of chevrons) {
+        const f = (((t * b.speed * 0.1 + k / 6) % 1) + 1) % 1;
+        m.position.set(b.dx ? -4.5 + f * 9 : ((k % 2) - 0.5) * 4, 5.04, b.dz ? top - 0.5 - f * 9 : top - 2 - (k % 3) * 3);
+      }
+    } });
+    zc -= 10;
+  });
+  level.beltZones = beltZones;
+  extWind.push((pos, out) => {
+    for (const z of beltZones) {
+      if (pos.y < 4.9 || pos.y > 5.4 || pos.z > z.zMax || pos.z < z.zMin || pos.x < z.xMin || pos.x > z.xMax) continue;
+      out.x += z.dx * z.speed;
+      out.z += z.dz * z.speed;
+    }
+  });
+  stage('컨베이어 뒤');
+
+  // 5) 얼음 판: 달리다 멈추기 어렵다 (양옆은 눈 둔덕이 막는다)
+  extStart('얼음 판 ★★');
+  extSign('얼음 판: 미리 힘을 빼요');
+  const iceMat = new THREE.MeshStandardMaterial({ color: 0xbfeaf7, roughness: 0.08, metalness: 0.25 });
+  platform(0, 5, zc - 11, 8, 22, 0xbfeaf7, { material: iceMat, icy: true });
+  for (const sx of [-1, 1]) block(sx * 4.3, 6.2, zc - 11, 0.6, 1.2, 22, 0xf8fbff, { castShadow: true });
+  [[-1.6, 5], [1.6, 11], [-1.6, 17]].forEach(([x, pz]) => block(x, 6.6, zc - pz, 1.8, 1.6, 1.8, 0xd9f3fb, { castShadow: true }));
+  zc -= 22;
+  stage('얼음 판 뒤');
+
+  // 6) 점프 패드 탑: 패드로 올라갔다가 계단으로 내려온다
+  extStart('점프 패드 탑 ★★★');
+  extSign('점프 패드 탑: 패드를 밟고 위로!');
+  const tower = [{ y: 5, pad: 16 }, { y: 9.4, pad: 17 }, { y: 13.8, pad: 0 }];
+  const towerZ = [];
+  tower.forEach((lv, i) => {
+    zc -= i === 0 ? 0 : 2.4; // 층 사이 틈 2.4m
+    const z = zc - 3;
+    platform(0, lv.y, z, 6, 6, i % 2 ? COLORS.step : COLORS.step2);
+    towerZ.push(z);
+    if (lv.pad) {
+      const pd = block(0, lv.y + 0.25, z - 1.9, 2.6, 0.25, 2.6, COLORS.pad, { kind: 'bounce', bounceSpeed: lv.pad }); // 앞쪽 가장자리 가까이
+      pd.material = mat(COLORS.pad, { emissive: 0x661133 });
+    }
+    zc -= 6;
+  });
+  challengeStar(9, 13.8, towerZ[2]); // 꼭대기 옆의 별
+  [9.4, 5].forEach((y) => { // 내려오는 계단
+    zc -= 3;
+    platform(0, y, zc - 3, 6, 6, COLORS.step2);
+    zc -= 6;
+  });
+  level.towerZ = towerZ;
+  stage('점프 패드 탑 뒤');
+
+  // 7) 해머 복도: 좁은 복도를 가로지르는 범퍼 (낮은 것은 넘고 높은 것은 기다린다)
+  extStart('해머 복도 ★★★');
+  extSign('해머 복도: 때를 보고 지나가라');
+  platform(0, 5, zc - 13, 8, 26, COLORS.bridge);
+  for (const sx of [-1, 1]) block(sx * 4.6, 10, zc - 13, 1.2, 5, 26, COLORS.pillar, { castShadow: true });
+  [[4.5, 1.4, 1.5, 0], [10, 2.5, 1.9, 1.7], [15.5, 1.4, 1.7, 3.2], [21, 2.5, 1.4, 0.6]].forEach(([hz, h, omega, phase]) => {
+    const hammer = block(0, 5 + h, zc - hz, 3.2, h, 1.4, COLORS.bar, { kind: 'bumper', dynamic: true, castShadow: true });
+    movers.push({ root: hammer, update(t) { hammer.position.x = Math.sin(t * omega + phase) * 2.5; } });
+  });
+  zc -= 26;
+  stage('해머 복도 뒤');
+
+  // 8) 맞바람: 바람이 시작 쪽으로 불어 온다 (벽 뒤에서 쉬었다 달린다)
+  extStart('맞바람 ★★★');
+  extSign('맞바람: 벽 뒤에서 쉬었다 달려라');
+  const HZ = { zMin: zc - 28, zMax: zc, power: 9 };
+  platform(0, 5, zc - 14, 9, 28, COLORS.bridge);
+  const shelters = [6, 13, 20].map((sz, i) => {
+    const x = i % 2 ? 1.8 : -1.8;
+    block(x, 6.9, zc - sz, 3.6, 1.9, 0.8, COLORS.pillar, { castShadow: true });
+    return { xMin: x - 2.2, xMax: x + 2.2, zMin: zc - sz, zMax: zc - sz + 4 }; // 벽 뒤(시작 쪽)는 바람이 약하다
+  });
+  const streaks = [];
+  for (let i = 0; i < 22; i++) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }));
+    scene.add(m);
+    streaks.push({ m, x: ((i * 37) % 9) - 4.5, y: 5.6 + (i % 4) * 0.7, p: i / 22 });
+  }
+  level.headwindStrength = (t) => gust(t, 1.4, 0.6, 2.6, 0.5);
+  level.shelters = shelters;
+  level.headwindZone = HZ;
+  movers.push({ root: null, update(t, dt) {
+    const s = level.headwindStrength(t);
+    for (const k of streaks) {
+      k.p = (k.p + dt * (0.15 + s * 0.9)) % 1;
+      k.m.position.set(k.x, k.y, HZ.zMax - 28 + k.p * 28);
+      k.m.material.opacity = s * 0.55;
+    }
+  } });
+  extWind.push((pos, out, t) => {
+    if (pos.z > HZ.zMax || pos.z < HZ.zMin || pos.y < 4.5 || pos.y > 10 || Math.abs(pos.x) > 5) return;
+    for (const sh of shelters) if (pos.x > sh.xMin && pos.x < sh.xMax && pos.z > sh.zMin && pos.z < sh.zMax) return;
+    out.z += level.headwindStrength(t) * HZ.power;
+  });
+  zc -= 28;
+  stage('맞바람 뒤');
+  extStart('골인 언덕');
+  const dz = zc + 222; // 골인 구간을 새 끝(zc)으로 옮기는 값 (음수)
+
+  // 바람 계산 합치기 (선풍기 + 컨베이어 + 맞바람). 맞바람은 시간이 필요해 마지막 갱신 시각을 쓴다.
+  const baseWind = level.windAt;
+  let lastT = 0;
+  movers.push({ root: null, update(t) { lastT = t; } });
+  level.windAt = (pos, out) => {
+    baseWind(pos, out);
+    for (const f of extWind) f(pos, out, lastT);
+  };
+  level.sectionAt = sectionFinder([...SECTIONS, ...ext]);
+
   // ─── 골인 언덕 ───────────────────────────────────────
   const rise = 3;
   const run = 12;
-  ramp(0, -222, 5, -222 - run, 5 + rise, 8, COLORS.ramp);
-  sign('골인 언덕', 0, 12, -221.5, { width: 5 });
+  ramp(0, -222 + dz, 5, -222 + dz - run, 5 + rise, 8, COLORS.ramp);
+  sign('골인 언덕', 0, 12, -221.5 + dz, { width: 5 });
 
-  [[-225, 0], [-229.5, Math.PI]].forEach(([z, phase]) => {
-    const y = 5 + ((-222 - z) / run) * rise;
+  [[-225, 0], [-229.5, Math.PI]].forEach(([z0, phase]) => {
+    const z = z0 + dz;
+    const y = 5 + ((-222 + dz - z) / run) * rise;
     const bumper = block(0, y + 1.4, z, 1.4, 1.4, 1.4, COLORS.bar, { kind: 'bumper', dynamic: true, castShadow: true });
     movers.push({
       root: bumper,
@@ -333,17 +547,17 @@ export function buildLevel(parent, world, { seed = Date.now() } = {}) {
     });
   });
 
-  const finish = platform(0, 8, -240, 14, 12, COLORS.finish);
-  for (const sx of [-1, 1]) block(sx * 6.4, 15, -236, 1, 7, 1, COLORS.pillar, { castShadow: true });
+  const finish = platform(0, 8, -240 + dz, 14, 12, COLORS.finish);
+  for (const sx of [-1, 1]) block(sx * 6.4, 15, -236 + dz, 1, 7, 1, COLORS.pillar, { castShadow: true });
   const goalArch = new THREE.Mesh(new THREE.BoxGeometry(13.8, 0.8, 1), mat(COLORS.pad));
-  goalArch.position.set(0, 15.4, -236);
+  goalArch.position.set(0, 15.4, -236 + dz);
   scene.add(goalArch);
-  sign('골인!', 0, 16.6, -235.45, { width: 4, color: '#ff5d8f' });
+  sign('골인!', 0, 16.6, -235.45 + dz, { width: 4, color: '#ff5d8f' });
   const crown = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.25, 8, 5), mat(0xffd60a, { emissive: 0x664400 }));
-  crown.position.set(0, 10, -242);
+  crown.position.set(0, 10, -242 + dz);
   scene.add(crown);
   movers.push({ root: null, update(t) { crown.rotation.y = t * 1.5; crown.position.y = 10 + Math.sin(t * 2) * 0.2; } });
-  finishPad(finish, -236);
+  finishPad(finish, -236 + dz);
 
   // ─── 배경 장식: 구름과 떠 있는 섬 ─────────────────────
   const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
