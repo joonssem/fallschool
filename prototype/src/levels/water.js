@@ -122,7 +122,8 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
     }
     if (i === cloudSteps.length - 1) checkpoint(p, new THREE.Vector3(x, y, z), '비가 내리는 곳');
   });
-  sign('강수', 9, 9, -68, { width: 4.5, color: '#2677b8', lines: ['강수', '구름 속 물방울이', '비가 되어 내려요'], rotY: -0.4 });
+  sign('강수', 9, 9, -68, { width: 4.5, color: '#2677b8', lines: ['강수', '구름 속 물방울·얼음 알갱이가', '비나 눈이 되어 내려요'], rotY: -0.4 });
+  buildSnowRoute();
   rainCurtain(-70, 5, -6);
   rainCurtain(-77, 4, 6);
 
@@ -183,6 +184,33 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   level.setSeed(seed);
   level.evapLifts = EVAP_LIFTS; // 시험용
   return finalizeLevel(level);
+
+  // 눈 구름 길(선택): 아주 차가운 구름에서는 비 대신 눈이 내린다. 눈 쌓인 구름 발판은 미끄럽다(얼음 바닥).
+  // 기본 구름 길(비) 서쪽에 나란히 있고 같은 착지점으로 이어진다. 바깥쪽 둔덕이 막아 옆으로는 잘 떨어지지 않는다.
+  function buildSnowRoute() {
+    const X = -12, zs = [-61, -68.5, -76], ys = [7, 5.8, 4.6];
+    const snowMat = new THREE.MeshStandardMaterial({ color: 0xeaf6ff, roughness: 0.1, metalness: 0.2 });
+    zs.forEach((z, i) => {
+      const x = i === 2 ? X + 2.5 : X; // 마지막 칸은 착지점(비 구름 길의 끝)에 거의 맞닿는다
+      platform(x, ys[i], z, 9, 6, 0xeaf6ff, { material: snowMat, icy: true, castShadow: true });
+      block(x - 4.7, ys[i] + 0.9, z, 0.6, 0.9, 6, C.cloud); // 서쪽 눈 둔덕
+      if (i === 1) block(x + 4.7, ys[i] + 0.9, z, 0.6, 0.9, 6, C.cloud); // 가운데 칸은 동쪽도 막는다 (양끝은 드나드는 길)
+    });
+    challengeStar(X - 8.5, ys[1], zs[1]); // 둔덕 너머 별: 미끄러운 바닥에서 방향을 잡아 뛰어야 한다
+    sign('눈 구름 길 (선택)', -6.5, 11.5, -64, { width: 5.2, color: '#3a8fb7', lines: ['눈 구름 길 (선택)', '아주 차가운 구름에서는 눈이 내려요', '눈 쌓인 바닥은 미끄러워요'], rotY: 0.35 });
+    const flakes = [];
+    for (let i = 0; i < 26; i++) {
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      root.add(f);
+      flakes.push({ f, x: X - 6 + ((i * 7) % 13), z: -58 - ((i * 5) % 22), phase: i / 26 });
+    }
+    movers.push({ root: null, update(t) {
+      for (const k of flakes) {
+        const h = (t * 0.12 + k.phase) % 1;
+        k.f.position.set(k.x + Math.sin(t * 0.8 + k.phase * 20) * 0.5, 12 - h * 9, k.z);
+      }
+    } });
+  }
 
   // 빙하 길(선택): 얼음(고체) 위는 미끄럽다. 달리면 멈추기까지 미끄러지니 얼음 기둥 사이를 돌아 나간다.
   // 양옆은 눈 둔덕이 막아 미끄러져도 떨어지지 않는다. 지표수·지하수와 같은 강 하구로 이어진다(옆 길과 무관한 선택).
