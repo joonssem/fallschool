@@ -84,6 +84,7 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   // ─── 동맥: 산소를 실은 혈액이 몸의 여러 곳으로 흐른다 ──
   vesselRun(-68, -97, C.vessel);
   bloodCells(-70, -96, 5, C.oxygen);
+  const artery = buildArteryStream();
   const capillary = platform(0, 1, -101, 20, 10, C.checkpoint);
   checkpoint(capillary, new THREE.Vector3(0, 1, -98), '모세혈관');
   challengeStar(14, 1, -101);
@@ -132,17 +133,62 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   };
   level.setSeed(seed);
   level.delivery = delivery; // 시험용
+  level.artery = artery;
+  level.muscleSpring = buildMuscleSpring();
   finalizeLevel(level);
   const baseReset = level.resetProgress;
   level.resetProgress = () => { baseReset(); delivery.reset(); };
   return level;
+
+  // 동맥 한가운데 빠른 혈류(선택): 가운데 띠(|x| < 2.6)는 진행 방향으로 밀어 줘 빠르지만, 같은 방향으로 천천히 떠가는
+  // 적혈구(부딪히면 튕겨 넘어진다)를 피해야 한다. 양옆은 흐름이 느려 밀어 주지 않고 적혈구도 없다.
+  // 실제 혈관도 가운데가 가장자리보다 빨리 흐르지만, 미는 힘과 튕김은 게임 과장이다. 바닥은 이어져 있어 떨어지지 않는다.
+  function buildArteryStream() {
+    const Z0 = -66, Z1 = -97, HALF = 2.6, PUSH = 3.2, CELL_SPEED = 4.5;
+    platform(0, Y - 0.02, -81.75, 14, 36.5, C.floor); // 동맥 입구(-63.5)부터 모세혈관 앞까지 발판 사이 틈을 메우는 바닥 (튕겨도 떨어지지 않게)
+    const lane = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, Z0 - Z1), new THREE.MeshBasicMaterial({ color: 0xff8fa3, transparent: true, opacity: 0.35 }));
+    lane.rotation.x = -Math.PI / 2; lane.position.set(0, Y + 0.03, (Z0 + Z1) / 2); root.add(lane);
+    sign('빠른 혈류 (선택)', -6.6, 4.6, -67, { width: 4.4, color: '#a22c3a', lines: ['빠른 혈류 (선택)', '가운데는 빨리 흘러 밀어 줘요', '적혈구에 부딪히면 튕겨요'], rotY: 0.4 });
+    const cells = [];
+    for (let i = 0; i < 2; i++) {
+      const cell = block(0, Y + 1.1, Z0, 1.5, 1.1, 1.0, 0xc1121f, { kind: 'bumper', dynamic: true, castShadow: true });
+      cells.push(cell);
+      movers.push({ root: cell, update(t) {
+        const span = Z0 - Z1, k = ((t * CELL_SPEED + i * span / 2) % span + span) % span;
+        cell.position.z = Z0 - k;
+        cell.position.x = Math.sin(t * 0.9 + i * 2.1) * 1.2; // 가운데 띠 안에서 살짝 흔들린다
+      } });
+    }
+    const inStream = (p) => Math.abs(p.x) < HALF && p.z < Z0 && p.z > Z1 && p.y < Y + 3;
+    level.windAt = (pos, out) => { if (inStream(pos)) out.z -= PUSH; };
+    return { cells, inStream, Z0, Z1, HALF };
+  }
+
+  // 근육 튕김 발판(산소 배달의 결과): 근육에 산소를 배달하면 근육 구역의 발판이 튕겨 올려 주고, 높은 곳의 별에 닿는다.
+  // 배달 전에는 보통 바닥이다. 상태는 학생별(내 배달만 본다). 기본 길과 무관한 선택 보상이다.
+  function buildMuscleSpring() {
+    const PX = -7, PZ = -134.5;
+    const pad = platform(PX, Y + 0.15, PZ, 2.4, 2.4, 0xb08968);
+    const col = pad.userData.collider;
+    col.bounceSpeed = 16;
+    pad.material = pad.material.clone();
+    challengeStar(PX, Y + 4.6, -140.5);
+    const note = sign('근육 발판', PX + 0.5, 3.8, PZ + 2.2, { width: 3.6, color: '#b45f2a', lines: ['근육 발판', '근육에 산소를 배달하면', '힘을 내 튕겨 줘요'], rotY: 0.3 });
+    movers.push({ root: null, update(t) {
+      const on = !!delivery.done.muscle;
+      col.kind = on ? 'bounce' : 'solid';
+      pad.material.color.setHex(on ? 0xff9f1c : 0xb08968);
+      pad.scale.y = on ? 1 + Math.max(0, Math.sin(t * 5)) * 0.25 : 1;
+    } });
+    return { pad, col, note };
+  }
 
   // 산소 배달(선택): 모세혈관 옆 발판에 서면 파란 산소를 그 장기에 전달한다. 어느 장기에 줄지 고르고, 세 곳 모두에 주면 온몸에 전달 표시가 켜진다.
   // 장기는 모두 산소가 필요하고, 쓰고 남은 이산화탄소는 혈액이 폐로 실어 간다(회색 알갱이). 어느 장기를 골라도 같은 과학이다.
   // 기본 완주와 무관하고, 상태는 학생별이다. 심장·혈관의 흐름 순서는 이 활동에서 건드리지 않는다.
   function buildDelivery() {
     const ORGANS = [
-      { key: 'muscle', name: '근육', z: -98.5, color: 0xe9a76b, msg: '근육 세포가 산소로 에너지를 얻어 힘을 내요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
+      { key: 'muscle', name: '근육', z: -98.5, color: 0xe9a76b, msg: '근육 세포가 산소로 에너지를 얻어 힘을 내요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요. (앞의 근육 구역에서 근육 발판이 튕겨 줘요)' },
       { key: 'brain', name: '뇌', z: -101, color: 0xf2a6c1, msg: '뇌 세포도 산소가 필요해요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
       { key: 'stomach', name: '위', z: -103.5, color: 0xd98a6a, msg: '위와 소화 기관의 세포도 산소를 써요. 쓰고 남은 이산화탄소는 혈액이 폐로 가져가요.' },
     ];

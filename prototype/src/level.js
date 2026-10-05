@@ -5,7 +5,7 @@
 // 구간마다 이름(난이도 ★)이 달라 교사 화면의 구간별 낙하 횟수로 어느 장애물이 어려운지 볼 수 있다. docs/31 참고.
 import * as THREE from 'three';
 import { mulberry32, sectionFinder, createLevel, makeKit, finalizeLevel } from './levels/kit.js';
-import { dynamicSign } from './levels/variants.js';
+import { dynamicSign, rngFor, shuffled } from './levels/variants.js';
 
 const COLORS = {
   start: 0xb8a9ff,
@@ -133,6 +133,7 @@ export function buildLevel(parent, world, { seed = Date.now(), difficulty = 'nor
   // 방 시드로 진짜 길을 정한다 (같은 방이면 모두 같은 길)
   level.setSeed = (s) => {
     level.seed = s;
+    level.clearGustCache?.();
     const pathRand = mulberry32(s);
     let col = Math.floor(pathRand() * COLS);
     const path = [];
@@ -559,10 +560,25 @@ export function buildLevel(parent, world, { seed = Date.now(), difficulty = 'nor
     return false;
   };
   // 시각 t의 돌풍: 방향, 세기(0~1), 예고 중인지. 한 번의 돌풍은 예고(잔잔) → 거세짐 → 강풍 → 약해짐
+  // 돌풍 순서는 경기 시드로 섞는다(같은 방은 모두 같은 순서). 한 바퀴(방향 수만큼) 안에 모든 방향이 한 번씩 나오고,
+  // 바퀴가 바뀔 때 같은 방향이 연달아 나오지 않게 한다. 외워서 숨기보다 예고(화살표·안내판)를 보고 판단하게 하려는 것.
+  const rawCycle = (c) => shuffled(rngFor(level.seed ?? 0, 100 + c), SEQ);
+  const cycleCache = new Map();
+  const cycle = (c) => {
+    if (!cycleCache.has(c)) {
+      const order = rawCycle(c);
+      if (order[0] === rawCycle(c - 1).at(-1)) [order[0], order[1]] = [order[1], order[0]];
+      if (cycleCache.size > 64) cycleCache.clear();
+      cycleCache.set(c, order);
+    }
+    return cycleCache.get(c);
+  };
+  level.clearGustCache = () => cycleCache.clear();
   const gustAt = (t) => {
     const k = Math.floor(t / GP);
     const u = t - k * GP;
-    const name = SEQ[((k % SEQ.length) + SEQ.length) % SEQ.length];
+    const n = SEQ.length, c = Math.floor(k / n);
+    const name = cycle(c)[k - c * n];
     let s = 0;
     const { calm, ramp, strong, fade } = D.wind;
     if (u >= calm) s = u < calm + ramp ? (u - calm) / ramp : u < calm + ramp + strong ? 1 : 1 - (u - calm - ramp - strong) / fade;

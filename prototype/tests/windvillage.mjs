@@ -91,4 +91,36 @@ for (const [name, dir, z, good, bad] of [['낮 도약대(동쪽)', 1, -109, DAY,
   T.check(`${name}: 바람이 없으면 못 닿고 해안 길로 (도약 ${edge})`, { ok: !n.onIsland && !n.fell && Math.abs(n.y - 2) < 0.1, why: JSON.stringify(n) });
   T.check(`${name}: 반대 바람이면 못 닿고 해안 길로 (도약 ${edge})`, { ok: !o.onIsland && !o.fell && Math.abs(o.y - 2) < 0.1, why: JSON.stringify(o) });
 }
+// 맞바람 연 발판(선택): 역풍 길에서 올라서면 맞바람으로 떠올라 옆 섬의 별에 닿는다. 순풍 길 바람으로는 뜨지 않는다.
+function kiteRide(fieldOverride, seed = 1) {
+  const mm = build(seed);
+  const k = mm.level.kite;
+  if (fieldOverride) k.field.wind = fieldOverride(mm);
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(k.x, k.base + 0.05, k.z), 0);
+  let t = 0, topAt = null;
+  for (; t < 8; t += S) {
+    mm.level.update(t, S, p);
+    p.step(S, { x: 0, y: 0 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt);
+    if (topAt === null && k.state.height >= k.top - k.base - 0.01) topAt = t;
+  }
+  const atTop = p.pos.y > k.top - 0.2;
+  // 꼭대기에서 동쪽 섬으로 걸어간다
+  for (let i = 0; i < 240; i++, t += S) { mm.level.update(t, S, p); p.step(S, { x: 1, y: 0 }, 0, mm.world, mm.level.windAt, mm.level.gravityAt); }
+  const star = mm.level.stars.some((s) => s.got && Math.abs(s.mesh.position.x - 13) < 0.5 && Math.abs(s.mesh.position.z - k.z) < 0.5);
+  return { atTop, topAt: topAt && +topAt.toFixed(2), star, y: +p.pos.y.toFixed(2), mm };
+}
+{
+  const r = kiteRide(null);
+  console.log('  연 발판: 꼭대기까지', r.topAt, '초');
+  T.check('연 발판: 맞바람(역풍 길)에서 떠올라 섬의 별을 얻음', { ok: r.atTop && r.star, why: JSON.stringify({ ...r, mm: undefined }) });
+  const tail = kiteRide((mm) => mm.level.windZones[mm.level.windZones.indexOf(mm.level.kite.field) - 1].wind.bind(null));
+  T.check('연 발판: 순풍 길 바람이면 뜨지 않음', { ok: !tail.atTop && !tail.star && tail.y < 1, why: JSON.stringify({ ...tail, mm: undefined }) });
+  const calm = kiteRide(() => () => {});
+  T.check('연 발판: 바람이 없으면 뜨지 않음', { ok: !calm.atTop && calm.y < 1, why: JSON.stringify({ ...calm, mm: undefined }) });
+  // 내려오면 발판은 다시 내려간다, 초기화하면 처음 높이
+  const mm = r.mm;
+  for (let t = 20; t < 25; t += S) mm.level.update(t, S, null);
+  T.check('연 발판: 아무도 없으면 내려옴', { ok: mm.level.kite.state.height === 0, why: String(mm.level.kite.state.height) });
+}
 T.report();

@@ -1,6 +1,6 @@
 import './harness.mjs';
-import { THREE, PhysicsWorld, run, tally } from './harness.mjs';
-import { ICE_PACKS, ICE_ROUTES, TRIAL_DURATION, iceTrial, iceDelivery, buildIceTaxi } from '../src/levels/icetaxi.js';
+import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
+import { ICE_PACKS, ICE_ROUTES, TRIAL_DURATION, BIG_SHOW, iceTrial, iceDelivery, buildIceTaxi } from '../src/levels/icetaxi.js';
 import { MAPS, mapById } from '../src/levels/index.js';
 
 const T = tally('열을 지키는 얼음 택배');
@@ -36,4 +36,60 @@ T.check('선택 포장·경로를 실제 이동해 도착 뒤 결과 확인', { 
 const skipPackWorld = new PhysicsWorld(); const skipPackLevel = buildIceTaxi(new THREE.Scene(), skipPackWorld, { seed: 2 });
 const skipPackWalk = run({ level: skipPackLevel, world: skipPackWorld }, [0, 0, 2], [[10, 2], [10, -6], [8, -8], [8, -18], [0, -22], [0, -25], [0, -39], [7, -53], [7, -63], [0, -80], [0, -104]], { maxT: 100 });
 T.check('포장 비교·선택을 건너뛰고도 기본 포장으로 걸어서 완주', { ok: skipPackWalk.ok && skipPackLevel.ice.pack === ICE_PACKS[0] && skipPackLevel.ice.delivered && !skipPackLevel.deliveryGate.userData.collider.enabled, why: skipPackWalk.why || `pack=${skipPackLevel.ice.pack?.id}` });
+
+// ─── 포장 무게 ↔ 길·별 (한 포장이 모든 목표에 유리하지 않다) ───
+const fresh = (seed = 5) => { const w = new PhysicsWorld(); return { world: w, level: buildIceTaxi(new THREE.Scene(), w, { seed }) }; };
+const sunWalk = (pack) => {
+  const m = fresh();
+  if (pack) m.level.ice.choosePack(pack);
+  return { m, r: run(m, [0, 1, -36], [[7, -44], [7, -53], [7, -58], [7, -66], [0, -80], [0, -104]], { maxT: 40 }) };
+};
+for (const pack of ICE_PACKS) {
+  const { m, r } = sunWalk(pack);
+  const expectClimb = pack.id !== 'pack-c';
+  T.check(`${pack.name}(${pack.weight}): 햇빛 길 바위턱 ${expectClimb ? '오름' : '못 오름'}`, { ok: r.ok === expectClimb && (expectClimb ? m.level.ice.delivered : !m.level.ice.delivered), why: r.why || `delivered=${m.level.ice.delivered}` });
+}
+{
+  const m = fresh(); m.level.ice.choosePack(ICE_PACKS[2]);
+  const r = run(m, [0, 1, -36], [[7, -45], [7, -49], [7, -45], [-7, -46], [-7, -68], [0, -80], [0, -104]], { maxT: 60 });
+  T.check('포장 C: 바위턱 앞에서 돌아 그늘 길로 바꾸면 그늘 길로 배송', { ok: r.ok && m.level.ice.route === ICE_ROUTES.shade && m.level.ice.delivered, why: r.why || `route=${m.level.ice.route?.name}` });
+}
+// 별 섬: 바위 위에서 동쪽으로 달려 끝에서 점프하고 공중에서 다이브. 점프·다이브 시각을 바꿔 한 번이라도 닿는지 본다.
+function rockStarReach(pack) {
+  let hits = 0, tries = 0, first = null;
+  for (const startX of [4.2]) for (const jumpX of [9.4, 9.8, 10.1, 10.4]) for (const diveVy of [3, 1.5, 0, -1.5, -3]) {
+    const m = fresh();
+    if (pack) m.level.ice.choosePack(pack);
+    const top = m.level.sunRock.top;
+    const p = new Player(new THREE.Scene());
+    p.respawn(new THREE.Vector3(startX, top, -55.5), Math.PI / 2);
+    let jumped = false, dived = false;
+    for (let t = 0; t < 3.5; t += S) {
+      if (!jumped && p.pos.x >= jumpX && p.grounded) { p.requestJump(); jumped = true; }
+      if (jumped && !dived && !p.grounded && p.vel.y <= diveVy) { p.requestDive(); dived = true; }
+      m.level.update(t, S, p);
+      p.step(S, { x: 1, y: 0 }, 0, m.world, m.level.windAt, m.level.gravityAt);
+    }
+    tries++;
+    if (m.level.sunRock.star.visible === false) { hits++; first ??= [jumpX, diveVy]; }
+  }
+  return { ok: hits > 0, hits: `${hits}/${tries}`, first };
+}
+const reachA = rockStarReach(ICE_PACKS[0]), reachB = rockStarReach(ICE_PACKS[1]), reachC = rockStarReach(ICE_PACKS[2]);
+console.log('  별 섬 (점프+다이브):', JSON.stringify({ A: reachA.hits, B: reachB.hits, C: reachC.hits }));
+T.check('별 섬: 가벼운 포장 A는 점프 + 다이브로 닿음', { ok: reachA.ok, why: '' });
+T.check('별 섬: 포장 B·C로는 닿지 않음', { ok: !reachB.ok && !reachC.ok, why: `B ${reachB.ok}, C ${reachC.ok}` });
+const big = deliveryTable.filter((row) => row.shade.remaining >= BIG_SHOW || row.sun.remaining >= BIG_SHOW).map((r) => r.pack);
+T.check(`큰 공연(${BIG_SHOW * 100}% 이상)은 포장 C로만`, { ok: big.length === 1 && big[0] === '포장 C', why: big.join(',') });
+{
+  const m = fresh(); m.level.ice.choosePack(ICE_PACKS[2]);
+  const r = run(m, [0, 1, -36], [[-7, -46], [-7, -68], [0, -80], [0, -96], [-5, -97]], { maxT: 60 });
+  T.check('포장 C + 그늘 길: 큰 공연 별이 무대에 나타나 얻음', { ok: r.ok && m.level.showStar.got, why: r.why || `remaining=${m.level.ice.delivery?.remaining}` });
+  const m2 = fresh(); m2.level.ice.choosePack(ICE_PACKS[1]);
+  const r2 = run(m2, [0, 1, -36], [[-7, -46], [-7, -68], [0, -80], [0, -96], [-5, -97]], { maxT: 60 });
+  T.check('포장 B: 도착해도 큰 공연 별은 나타나지 않음', { ok: r2.ok && !m2.level.showStar.got && m2.level.showStar.mesh.position.y < -100, why: r2.why });
+  m.level.resetProgress();
+  T.check('초기화하면 공연 별·무게가 처음으로', { ok: !m.level.showStar.got && m.level.showStar.mesh.position.y < -100 && m.level.gravityAt() === 1, why: '' });
+}
+T.check('도착 뒤에는 포장 무게가 사라짐(점프 보통)', (() => { const m = fresh(); m.level.ice.choosePack(ICE_PACKS[2]); const before = m.level.gravityAt(); m.level.ice.chooseRoute(ICE_ROUTES.shade); m.level.update(1, 1, { pos: new THREE.Vector3(0, 1, -88) }); return { ok: before === 1.6 && m.level.gravityAt() === 1, why: `${before} → ${m.level.gravityAt()}` }; })());
 T.report();
