@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/giantlab.mjs && node tests/lab.mjs && node tests/body-water.mjs body && node tests/body-water.mjs water && node tests/body-flow.mjs && node tests/water-lift.mjs && node tests/valve.mjs && node tests/pizza.mjs && node tests/colorstudio.mjs && node tests/geometrylab.mjs && node tests/coop.mjs && node tests/solar-gates.mjs && node tests/maps-meta.mjs && node tests/wind.mjs && node tests/windvillage.mjs && node tests/shadowtheater.mjs && node tests/acid-lab.mjs && node tests/course.mjs && node tests/robotcity.mjs && node tests/robotcity-walk.mjs && node tests/icetaxi.mjs && node tests/echodetective.mjs && node tests/magnetharbor.mjs && node tests/sentencetrain.mjs"
+    "test": "node tests/giantlab.mjs && node tests/lab.mjs && node tests/body-water.mjs body && node tests/body-water.mjs water && node tests/body-flow.mjs && node tests/water-lift.mjs && node tests/valve.mjs && node tests/pizza.mjs && node tests/colorstudio.mjs && node tests/geometrylab.mjs && node tests/coop.mjs && node tests/solar-gates.mjs && node tests/maps-meta.mjs && node tests/wind.mjs && node tests/windvillage.mjs && node tests/shadowtheater.mjs && node tests/acid-lab.mjs && node tests/course.mjs && node tests/robotcity.mjs && node tests/robotcity-walk.mjs && node tests/icetaxi.mjs && node tests/echodetective.mjs && node tests/magnetharbor.mjs && node tests/sentencetrain.mjs && node tests/seedrescue.mjs"
   },
   "devDependencies": {
     "three": "0.170.0"
