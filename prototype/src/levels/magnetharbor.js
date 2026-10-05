@@ -18,6 +18,9 @@ export function craneLayout(seed) {
   return shuffled(rand, [...CRANE_ITEMS.iron.map((it) => ({ ...it, iron: true })), ...others.map((it) => ({ ...it, iron: false }))]);
 }
 /** 시드별 섬 자석의 극: 앞면(첫 나룻배가 다가가는 쪽)과 뒷면(둘째 나룻배가 떠나는 쪽) */
+export const STONE_SWAY = { amp: 2.0, w: 1.1 }; // 돌 폭 3.4m: 가운데(x 0)에 그냥 서 있으면 돌이 빠져나가는 때가 있다
+/** i번째 징검다리의 시각 t 좌우 위치 */
+export const stoneX = (i, t) => STONE_SWAY.amp * Math.sin(STONE_SWAY.w * t + i * Math.PI / 2);
 export function islandPoles(seed) {
   const rand = rngFor(seed, 62);
   return { front: rand() < 0.5 ? 'N' : 'S', back: rand() < 0.5 ? 'N' : 'S' };
@@ -31,12 +34,13 @@ export function ferryTarget(boatPole, dockPole, magnetAhead) {
 
 export const HARBOR_ROUTES = {
   iron: [
-    { id: 'challenge', x: -5, width: 3.6, label: '좁은 철 화물 · 별' },
+    // sway: 자리를 잡은 뒤 좌우로 흔들리는 폭(m). 좁은 별 길만 흔들려 타이밍이 필요하고, 넓은 길은 멈춰 있다(안전한 기본 길)
+    { id: 'challenge', x: -5, width: 3.6, label: '좁은 철 화물 · 별', sway: 1.2 },
     { id: 'steady', x: 5, width: 5.6, label: '넓은 철 화물' },
   ],
   boat: [
     { id: 'attract', x: -4.5, width: 5.6, label: '다른 극 · 넓은 길' },
-    { id: 'repel', x: 4.5, width: 3.6, label: '같은 극 · 별 길' },
+    { id: 'repel', x: 4.5, width: 3.6, label: '같은 극 · 별 길', sway: 1.2 },
   ],
 };
 
@@ -90,13 +94,21 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
     back.position.y = 0.35;
     marker.add(back);
     mesh.add(marker);
-    const entry = { ...spec, mesh, targetX: spec.x, active: false };
+    const entry = { ...spec, mesh, targetX: spec.x, active: false, arrived: false, swayT: 0 };
     routes[group].push(entry);
     movers.push({ root: mesh, update(_t, dt) {
+      if (entry.active && entry.arrived) { // 자리를 잡은 뒤: 흔들리는 다리는 제자리에서 0부터 좌우로 (같은 장면이 되도록 자리 잡은 뒤 시간 기준)
+        entry.swayT += dt;
+        mesh.position.x = entry.targetX + (entry.sway || 0) * Math.sin(entry.swayT * 1.1);
+        mesh.userData.collider.enabled = true;
+        return;
+      }
       const wanted = entry.active ? entry.targetX : (entry.x < 0 ? -24 : 24);
       const dx = wanted - mesh.position.x;
       mesh.position.x += Math.sign(dx) * Math.min(Math.abs(dx), 18 * dt);
-      mesh.userData.collider.enabled = entry.active && Math.abs(mesh.position.x - wanted) < 0.03;
+      entry.arrived = entry.active && Math.abs(mesh.position.x - wanted) < 0.03;
+      if (entry.arrived) entry.swayT = 0;
+      mesh.userData.collider.enabled = entry.arrived;
     } });
     return entry;
   }
@@ -146,11 +158,18 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
   });
   // 징검다리 자리: 철 물건이 날아오면 밟을 수 있는 발판이 켜진다
   const stones = CRANE_SLOTS.map((z) => {
-    const mesh = platform(0, 1, z, 3.4, 3.4, 0x7d8790, { castShadow: true });
+    const mesh = platform(0, 1, z, 3.4, 3.4, 0x7d8790, { castShadow: true, dynamic: true });
     mesh.visible = false; mesh.userData.collider.enabled = false;
     return mesh;
   });
   crane.stones = stones;
+  platform(0, 1, -99.3, 8, 1.4, 0xd9c6a1); // 마지막 돌과 다음 부두 사이 받침(틈을 없앤다)
+  // 징검다리는 물 위에서 좌우로 흔들린다(점프 연구소의 움직이는 발판을 빌려 옴). 이웃한 돌은 박자가 1/4 주기씩 어긋나
+  // 가장 많이 어긋나도 약 0.55m는 겹친다. 시간 t로만 정해져 모든 화면이 같다. 발판에 탄 학생은 함께 움직인다.
+  movers.push({ root: null, update(t) {
+    stones.forEach((st, i) => { st.position.x = stoneX(i, t); });
+  } });
+  for (const st of stones) level.movers.push({ root: st, update() {} }); // 충돌체 행렬 갱신용
   const craneStar = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), mat(0xffd60a, { emissive: 0xffb703, emissiveIntensity: 0.8 }));
   const CRANE_STAR_AT = new THREE.Vector3(7, 2.6, -104), HIDDEN = new THREE.Vector3(0, -200, 0);
   craneStar.position.copy(HIDDEN); root.add(craneStar);
@@ -190,6 +209,7 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
       if (p.flight) {
         p.flight.t = Math.min(1, p.flight.t + dt / 0.9);
         const k = p.flight.t;
+        p.flight.to.x = stones[p.flight.slot].position.x; // 흔들리는 자리로 날아간다
         p.item.position.lerpVectors(p.flight.from, p.flight.to, k);
         p.item.position.y += Math.sin(k * Math.PI) * 4;
         if (k >= 1) { stones[p.flight.slot].visible = true; stones[p.flight.slot].userData.collider.enabled = true; p.item.visible = false; p.flight = null; }
@@ -290,6 +310,13 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
   ferry({ name: '밀기', homeZ: -146.7, farZ: -161.3, magnetAhead: false, magnetZ: -144.15, poleKey: 'back' });
   sign('자석 나룻배 2', -6.5, 4.6, -142, { width: 5, lines: ['자석 나룻배 2', '이번엔 자석이 배 뒤에 있어요', '밀어내게 하려면 어떤 극?'], rotY: 0.3 });
   level.ferries = ferries;
+  // 나룻배 2 위 공중 별(선택): 배 한가운데에 서서 별 밑을 지날 때 뛰면 닿는다. 배 위에 다시 내려앉아 떨어지지 않는다.
+  // 서 있기만 하면 닿지 않는다(머리 위 약 2m). 배를 기다리는 시간을 타이밍 도전으로 바꾼다.
+  const airStar = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), mat(0xffd60a, { emissive: 0xffb703, emissiveIntensity: 0.8 }));
+  airStar.position.set(0, 3.95, -154); root.add(airStar);
+  level.stars.push({ mesh: airStar, got: false });
+  level.airStar = level.stars.at(-1);
+  sign('하늘 별 (선택)', 6.5, 4.6, -146, { width: 4.4, color: '#c07a1a', lines: ['하늘 별 (선택)', '배 가운데에 서서', '별 밑을 지날 때 뛰어요'], rotY: -0.3 });
 
   const goalDock = platform(0, 1, -170, 20, 12, 0xd9c6a1);
   void goalDock;
@@ -315,7 +342,7 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
     state[group] = id;
     for (const entry of routes[group]) {
       entry.active = entry === choice;
-      if (!entry.active) entry.mesh.userData.collider.enabled = false;
+      if (!entry.active) { entry.mesh.userData.collider.enabled = false; entry.arrived = false; }
     }
     level.onMessage?.(group === 'iron'
       ? `${choice.label}: 자석이 철 화물을 끌어와 길을 만들어요.`
@@ -328,7 +355,7 @@ export function buildMagnetHarbor(parent, world, { seed = 1 } = {}) {
     resetProgress();
     state.iron = null; state.boat = null;
     for (const entry of [...routes.iron, ...routes.boat]) {
-      entry.active = false;
+      entry.active = false; entry.arrived = false;
       entry.mesh.position.x = entry.x < 0 ? -24 : 24;
       entry.mesh.userData.collider.enabled = false;
       entry.mesh.updateMatrixWorld(true);

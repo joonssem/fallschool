@@ -1,5 +1,5 @@
 import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
-import { buildMagnetHarbor, HARBOR_ROUTES, CRANE_SLOTS, craneLayout, islandPoles, ferryTarget } from '../src/levels/magnetharbor.js';
+import { buildMagnetHarbor, HARBOR_ROUTES, CRANE_SLOTS, craneLayout, islandPoles, ferryTarget, stoneX, STONE_SWAY } from '../src/levels/magnetharbor.js';
 import { mapById } from '../src/levels/index.js';
 
 const T = tally('자석 항구');
@@ -8,6 +8,46 @@ const fresh = () => {
   const world = new PhysicsWorld();
   return { world, level: buildMagnetHarbor(new THREE.Scene(), world, { seed: 7 }) };
 };
+// 흔들리는 징검다리 건너기 봇: 지금 선 곳에서 다음 돌의 좌우 위치에 맞춰 서 있다가, 가까워지면 천천히 다가가 짧게 뛰어 옮겨 간다
+// (돌 깊이 3.4m라 전속력으로 뛰면 다음 돌을 지나칠 수 있다).
+// smart=false: 돌을 보지 않고 가운데(x 0)로 곧장 달린다(비교용).
+function crossStones(m, t0, smart = true) {
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(0, 1, -80.8), 0);
+  let t = t0, i = 0; // i: 다음에 옮겨 갈 돌 번호 (4 = 도착 부두)
+  while (t < t0 + 40) {
+    const onZ = i === 0 ? -80.8 : CRANE_SLOTS[i - 1];
+    const nextZ = i < CRANE_SLOTS.length ? CRANE_SLOTS[i] : -102;
+    const nextX = i < CRANE_SLOTS.length ? stoneX(i, t + 0.6) - (stoneX(i - 1, t + 0.6) - stoneX(i - 1, t)) * (i > 0 ? 1 : 0) : 0; // 내려앉을 때의 다음 돌 위치(지금 돌이 움직이는 만큼은 빼 준다)
+    let mx = 0, mz = 0;
+    if (!smart) { mx = -p.pos.x; mz = -1; }
+    else {
+      const ready = Math.abs(nextX - p.pos.x) < 0.9; // 다음 돌이 내 앞에 왔다
+      const curX = i === 0 ? 0 : stoneX(i - 1, t), room = i === 0 ? 8 : 1.1; // 지금 선 돌 밖으로는 걸어 나가지 않는다
+      const tx = p.grounded ? THREE.MathUtils.clamp(nextX, curX - room, curX + room) : nextX;
+      mx = THREE.MathUtils.clamp((tx - p.pos.x) * 1.5, -1, 1);
+      if (!p.grounded) mz = -0.6; else if (ready) mz = -0.6; else mz = THREE.MathUtils.clamp((onZ - p.pos.z) * 2, -1, 1); // 준비가 안 되면 지금 선 돌 가운데에서 기다린다
+    }
+    if (p.pos.z < nextZ + 0.3 && p.grounded) { i++; if (i > CRANE_SLOTS.length) return { ok: true, t: +(t - t0).toFixed(1) }; }
+    // 앞이 비면 점프 (harness 봇과 같은 방식: 돌 끝에서 뛴다)
+    if (p.grounded && mz < 0 && (!smart || Math.abs(nextX - p.pos.x) < 0.9)) {
+      const ahead = new THREE.Vector3(p.pos.x + mx * 0.3, p.pos.y + 0.6, p.pos.z - 0.9);
+      let best = Infinity;
+      for (const c of m.world.colliders) if (c.enabled) best = Math.min(best, c.raycast(ahead, new THREE.Vector3(0, -1, 0), 1.2));
+      if (best > 1.15) p.requestJump();
+    }
+    m.level.update(t, S, p);
+    p.step(S, { x: mx, y: -mz }, 0, m.world, m.level.windAt, m.level.gravityAt);
+    if (p.pos.y < -5) return { ok: false, why: `떨어짐 z=${p.pos.z.toFixed(1)} 돌 ${i}`, t: +(t - t0).toFixed(1) };
+    t += S;
+  }
+  return { ok: false, why: '시간 초과' };
+}
+function placeAllIron(m) {
+  const c = m.level.crane;
+  c.pads.forEach((pp, i) => { if (pp.spec.iron) c.tap(i); });
+  for (let t = 0; t < 2; t += 1 / 60) m.level.update(t, 1 / 60, null);
+}
 const { level, world } = fresh();
 T.check('시작 때 건널 길은 대기 위치에 있음', {
   ok: level.routeBridges.iron.every((r) => !r.mesh.userData.collider.enabled) && level.routeBridges.boat.every((r) => !r.mesh.userData.collider.enabled), why: '',
@@ -71,9 +111,12 @@ function craneWalk(seed, wrongFirst) {
   if (wrongFirst) order.unshift(c.pads.findIndex((p) => !p.spec.iron));
   const targets = [[0, -66]];
   for (const i of order) targets.push([c.pads[i].x * 0.6, c.pads[i].z], [c.pads[i].x, c.pads[i].z], [c.pads[i].x * 0.6, c.pads[i].z]);
-  targets.push([0, -80], ...CRANE_SLOTS.map((z) => [0, z]), [0, -103], [7, -104]);
-  const r = run(m, [0, 1, -66], targets, { maxT: 90 });
-  return { r, m };
+  targets.push([0, -80]);
+  const r0 = run(m, [0, 1, -66], targets, { maxT: 90 });
+  for (let t = 0; t < 1.5; t += 1 / 60) m.level.update(t, 1 / 60, null); // 마지막 철이 날아가 자리 잡을 때까지
+  const cross = r0.ok ? crossStones(m, 7.3) : r0;
+  const r1 = cross.ok ? run(m, [0, 1, -102], [[7, -104]], { maxT: 10 }) : cross;
+  return { r: { ok: r0.ok && cross.ok && r1.ok, why: r0.why || cross.why || r1.why }, m };
 }
 for (const seed of [1, 4, 9]) {
   const { r, m } = craneWalk(seed, false);
@@ -148,12 +191,70 @@ for (const seed of [3, 6]) {
   const c = m.level.crane;
   const t1 = [[5, -11], [5, -25], [5, -34], [0, -39], [-4.5, -43], [-4.5, -56], [-4.5, -66], [0, -66]];
   for (const i of c.pads.map((p, k) => k).filter((k) => c.pads[k].spec.iron)) t1.push([c.pads[i].x * 0.6, c.pads[i].z], [c.pads[i].x, c.pads[i].z], [c.pads[i].x * 0.6, c.pads[i].z]);
-  t1.push([0, -80], ...CRANE_SLOTS.map((z) => [0, z]), [0, -106]);
-  const r1 = run(m, [0, 1, 4], t1, { maxT: 150 });
+  t1.push([0, -80]);
+  const r0 = run(m, [0, 1, 4], t1, { maxT: 150 });
+  for (let t = 0; t < 1.5; t += 1 / 60) m.level.update(t, 1 / 60, null);
+  const cr = r0.ok ? crossStones(m, 3.1) : r0;
+  const r1 = { ok: r0.ok && cr.ok, why: r0.why || cr.why };
   const poles = islandPoles(seed);
   const a = r1.ok && ride(m, 0, poles.front === 'N' ? 'S' : 'N', -106, -138);
   const b = a && a.ok && ride(m, 1, poles.back, -138, -173);
   const total = 4 + 170; // 참고용: 출발 z 4 → 결승 z -172
   T.check(`전 구간 걸어서 완주 시드 ${seed} (길이 약 ${total}m)`, { ok: r1.ok && a.ok && b.ok && m.level.finished, why: r1.why || JSON.stringify({ a: a && { ...a, f: undefined }, b: b && { ...b, f: undefined }, fin: m.level.finished }) });
+}
+
+// ─── 흔들리는 다리 ───
+{
+  // 징검다리: 이웃한 돌은 가장 많이 어긋나도 겹친다, 가운데(x 0)에서 빠져나가는 때가 있다
+  let worstOverlap = Infinity, centerOff = false;
+  for (let t = 0; t < 12; t += 0.01) {
+    for (let i = 0; i + 1 < CRANE_SLOTS.length; i++) worstOverlap = Math.min(worstOverlap, 3.4 - Math.abs(stoneX(i, t) - stoneX(i + 1, t)));
+    if (Math.abs(stoneX(0, t)) > 1.7 - 0.45) centerOff = true;
+  }
+  T.check(`징검다리: 이웃한 돌은 항상 겹침 (최소 ${worstOverlap.toFixed(2)}m)`, { ok: worstOverlap > 0.5, why: '' });
+  T.check('징검다리: 가만히 가운데로만 가면 돌이 빠져나가는 때가 있음(타이밍 필요)', { ok: centerOff, why: '' });
+  const t0s = [0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0, 4.4, 4.8, 5.2];
+  let smartOk = 0, naiveOk = 0, times = [];
+  for (const t0 of t0s) {
+    const m = fresh(); placeAllIron(m);
+    const a = crossStones(m, t0, true); if (a.ok) { smartOk++; times.push(a.t); }
+    const m2 = fresh(); placeAllIron(m2);
+    if (crossStones(m2, t0, false).ok) naiveOk++;
+  }
+  console.log(`  흔들리는 징검다리: 돌을 보고 건너는 봇 ${smartOk}/${t0s.length} (평균 ${(times.reduce((x, y) => x + y, 0) / Math.max(1, times.length)).toFixed(1)}초), 가운데로 곧장 ${naiveOk}/${t0s.length}`);
+  T.check('징검다리: 돌 위치를 보고 건너면 어느 출발 시각에도 건넘', { ok: smartOk === t0s.length, why: `${smartOk}/${t0s.length}` });
+  // 좁은 별 길만 흔들리고 넓은 길은 멈춰 있다
+  const m = fresh();
+  m.level.harbor.choose('iron', 'challenge'); m.level.harbor.choose('boat', 'attract');
+  const xs = { narrow: [], wide: [] };
+  for (let t = 0; t < 6; t += 1 / 60) { m.level.update(t, 1 / 60, null); if (t > 3) { xs.narrow.push(m.level.routeBridges.iron[0].mesh.position.x); xs.wide.push(m.level.routeBridges.boat[0].mesh.position.x); } }
+  const span = (a) => Math.max(...a) - Math.min(...a);
+  T.check('좁은 별 다리는 자리 잡은 뒤 좌우로 흔들림', { ok: span(xs.narrow) > 2 && m.level.routeBridges.iron[0].mesh.userData.collider.enabled, why: span(xs.narrow).toFixed(2) });
+  T.check('넓은 다리는 멈춰 있음', { ok: span(xs.wide) < 0.01, why: span(xs.wide).toFixed(3) });
+}
+// ─── 나룻배 2 하늘 별: 서 있기만 하면 못 얻고, 별 밑에서 뛰면 얻는다 ───
+function airStarTry(jump) {
+  const m = fresh(); m.level.setSeed(4);
+  const poles = islandPoles(4);
+  const f = m.level.ferries[1];
+  const pad = f.pads.find((q) => q.pole === poles.back);
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(pad.x, 1, f.homeZ + pad.dz), 0);
+  let jumped = false;
+  for (let t = 0; t < 9; t += S) {
+    const bz = f.boat.position.z;
+    const mx = Math.abs(f.boat.position.z - f.homeZ) > 0.5 ? THREE.MathUtils.clamp(-p.pos.x * 2, -1, 1) : 0; // 출발하면 배 가운데로
+    if (jump && !jumped && p.grounded && Math.abs(p.pos.x) < 0.3 && Math.abs(p.pos.z - (-154)) < 0.9) { p.requestJump(); jumped = true; }
+    m.level.update(t, S, p);
+    p.step(S, { x: mx, y: 0 }, 0, m.world, m.level.windAt, m.level.gravityAt);
+    if (p.pos.y < -5) return { got: m.level.airStar.got, fell: true };
+    void bz;
+  }
+  return { got: m.level.airStar.got, fell: false, onBoat: Math.abs(p.pos.z - f.farZ) < 2.6 };
+}
+{
+  const stand = airStarTry(false), hop = airStarTry(true);
+  T.check('하늘 별: 배 위에 서 있기만 하면 못 얻음', { ok: !stand.got && !stand.fell, why: JSON.stringify(stand) });
+  T.check('하늘 별: 별 밑에서 뛰면 얻고 배 위로 내려앉음', { ok: hop.got && !hop.fell && hop.onBoat, why: JSON.stringify(hop) });
 }
 T.report();
