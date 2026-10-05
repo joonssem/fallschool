@@ -159,7 +159,8 @@ export function buildSolar(parent, world, { seed = Date.now() } = {}) {
   block(-1.8, 11, -151, 0.4, 1, 2.5, C.marsDark);
 
   const storms = [
-    { zMin: -140, zMax: -125, dir: 1, offset: 0, strength: 0 },
+    // 체크포인트 '화성 폭풍 앞'(부활 z -127) 둘레는 바람이 닿지 않게 -129.5부터 분다 (가만히 서 있어도 밀려 떨어지지 않게, tests/map-rules.mjs)
+    { zMin: -140, zMax: -129.5, dir: 1, offset: 0, strength: 0 },
     { zMin: -155, zMax: -140, dir: -1, offset: 2, strength: 0 },
   ];
   for (const st of storms) {

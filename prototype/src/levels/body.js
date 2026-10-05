@@ -144,7 +144,8 @@ export function buildBody(parent, world, { seed = Date.now() } = {}) {
   // 적혈구(부딪히면 튕겨 넘어진다)를 피해야 한다. 양옆은 흐름이 느려 밀어 주지 않고 적혈구도 없다.
   // 실제 혈관도 가운데가 가장자리보다 빨리 흐르지만, 미는 힘과 튕김은 게임 과장이다. 바닥은 이어져 있어 떨어지지 않는다.
   function buildArteryStream() {
-    const Z0 = -66, Z1 = -97, HALF = 2.6, PUSH = 3.2, CELL_SPEED = 4.5;
+    // Z0: 체크포인트 '동맥'(부활 z -66)에서 4m 떨어진 곳부터. 부활하자마자 적혈구에 겹치지 않게 (tests/map-rules.mjs)
+    const Z0 = -70, Z1 = -97, HALF = 2.6, PUSH = 3.8, CELL_SPEED = 4.5;
     platform(0, Y - 0.02, -81.75, 14, 36.5, C.floor); // 동맥 입구(-63.5)부터 모세혈관 앞까지 발판 사이 틈을 메우는 바닥 (튕겨도 떨어지지 않게)
     const lane = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, Z0 - Z1), new THREE.MeshBasicMaterial({ color: 0xff8fa3, transparent: true, opacity: 0.35 }));
     lane.rotation.x = -Math.PI / 2; lane.position.set(0, Y + 0.03, (Z0 + Z1) / 2); root.add(lane);
