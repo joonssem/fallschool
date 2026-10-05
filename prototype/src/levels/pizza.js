@@ -14,6 +14,25 @@ const TARGET_POOLS = [[2, 4], [4, 6], [6, 8]];
 const LABELS = { 2: '4분의 1 (1/4)', 4: '반 판 (1/2)', 6: '4분의 3판 (3/4)', 8: '한 판 (1)' };
 export const orderLabel = (target) => LABELS[target];
 
+/** 주어진 조각(8분의 몇)으로 target을 만드는 조각 개수들 (최대 maxPieces개) */
+export function pieceCounts(units, target, maxPieces = 8) {
+  const counts = new Set();
+  const walk = (i, left, n) => {
+    if (left === 0) { counts.add(n); return; }
+    if (i >= units.length || n >= maxPieces) return;
+    for (let k = 0; k * units[i] <= left && n + k <= maxPieces; k++) walk(i + 1, left - k * units[i], n + k);
+  };
+  walk(0, target, 0);
+  return [...counts].sort((a, b) => a - b);
+}
+
+/** 보너스 요청 조각 수: 가장 적은 개수(큰 조각만 고르면 되는 답)는 빼고, 6개 이하에서 시드로 고른다 */
+export function bonusCount(units, target, rand) {
+  const counts = pieceCounts(units, target, 6);
+  const options = counts.length > 1 ? counts.slice(1) : counts;
+  return options[Math.floor(rand() * options.length) % options.length];
+}
+
 export function buildPizza(parent, world, { seed = 1 } = {}) {
   const level = createLevel(parent, world, {
     sectionAt: sectionFinder([
@@ -44,9 +63,16 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
     const deck = platform(0, 1, z + 8, 24, 24, color);
     const cp = checkpoint(deck, new THREE.Vector3(0, 1, z + 17), title);
     cp.noHelp = true; // 주문의 틀린 조합은 낙하로 처리하지 않는다.
-    const order = { target: 0, units, total: 0, pieces: [], solved: false, pads: [], z, index };
+    const order = { target: 0, units, total: 0, pieces: [], solved: false, pads: [], z, index, bonus: 0, bonusDone: false };
     level.orders.push(order);
     const heading = dynamicSign(level.root, { x: 0, y: 8.5, z: z + 1, width: 6, color: '#a44a19' });
+    // 보너스 요청(선택): 같은 양을 정해진 조각 수로. 문은 주문량만 맞추면 열리고, 보너스는 그 뒤에도 다시 해 볼 수 있다.
+    const bonusSign = dynamicSign(level.root, { x: -9.5, y: 6.6, z: z + 1.4, width: 5, rows: 2, rotY: 0.35, color: '#7b2cbf' });
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), new THREE.MeshStandardMaterial({ color: 0xffd60a, emissive: 0xffb703, emissiveIntensity: 0.8 }));
+    const STAR_AT = new THREE.Vector3(-8.5, 2.6, z + 10), HIDDEN = new THREE.Vector3(0, -200, 0);
+    star.position.copy(HIDDEN); level.root.add(star);
+    order.star = { mesh: star, got: false };
+    level.stars.push(order.star);
     sign('조각 담기', -8.5, 4, z + 6, { width: 3.5, color: '#a44a19', lines: ['한 번 밟으면 한 조각', '내려왔다 다시 밟아요'], rotY: 0.35 });
 
     // 같은 반지름, 같은 8등분: 주문량과 내가 모은 양을 나란히 비교.
@@ -83,7 +109,9 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
       ctx.fillStyle = order.total > order.target ? '#b03030' : '#634024';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = 'bold 46px "Malgun Gothic", sans-serif';
-      ctx.fillText(`${order.total}/8${order.solved ? ' · 완성!' : order.total > order.target ? ' · 주문보다 많아요' : ''}`, 256, 64);
+      const exact = order.total === order.target;
+      ctx.fillText(`${order.total}/8 · 조각 ${order.pieces.length}개${exact ? ' · 완성!' : order.total > order.target ? ' · 많아요' : ''}`, 256, 64);
+      bonusSign.set(order.bonusDone ? ['보너스 성공!', `조각 ${order.bonus}개로 만들었어요`] : ['보너스 요청 (선택)', `조각 ${order.bonus}개로 같은 양을!`], order.bonusDone ? '#2a9d8f' : '#7b2cbf');
       texture.needsUpdate = true;
     }
     const door = block(0, 7, z - 3, 8, 6, 0.8, 0xb5651d, { dynamic: true });
@@ -108,15 +136,21 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
       for (const pad of order.pads) {
         const p = player?.pos;
         const occupied = !!p && Math.abs(p.x - pad.x) < 1.4 && Math.abs(p.z - pad.z) < 1.4 && p.y > 0.8 && p.y < 2;
-        if (occupied && !pad.occupied && !order.solved) {
+        // 완성한 뒤에도 조각을 바꿔 볼 수 있다(문은 열린 채). 같은 양을 다른 조각으로 만드는 보너스를 위해서다.
+        if (occupied && !pad.occupied) {
           if (pad.unit === 0) { order.total = 0; order.pieces = []; }
           else if (pad.unit === -1) order.total -= order.pieces.pop() || 0;
           else if (order.total + pad.unit <= 16) { order.pieces.push(pad.unit); order.total += pad.unit; }
           else level.onMessage?.('한 판보다 많이 담았어요. 조각 취소나 처음부터를 사용해요.', false);
-          if (order.total === order.target) {
+          const exact = order.total === order.target;
+          const bonusNow = exact && order.pieces.length === order.bonus && !order.bonusDone;
+          if (bonusNow) { order.bonusDone = true; if (!order.star.got) star.position.copy(STAR_AT); }
+          if (exact && !order.solved) {
             order.solved = true;
-            level.onMessage?.('주문 완성! 같은 양을 다른 조각으로도 만들 수 있어요.', true);
-          } else if (order.total > order.target) level.onMessage?.('주문보다 많아요. 마지막 조각을 취소해 보세요.', false);
+            level.onMessage?.(bonusNow ? `주문 완성! 보너스 요청(조각 ${order.bonus}개)까지 맞췄어요. 별을 받아요!` : `주문 완성! 문이 열렸어요. 보너스: 조각 ${order.bonus}개로도 만들 수 있을까요? (선택)`, true);
+          } else if (bonusNow) level.onMessage?.(`보너스 성공! 조각 ${order.bonus}개로 같은 양을 만들었어요. 별을 받아요!`, true);
+          else if (exact && order.solved) level.onMessage?.(`같은 양이에요! 이번엔 조각 ${order.pieces.length}개.${order.bonusDone ? '' : ` 보너스는 ${order.bonus}개예요.`}`, true);
+          else if (order.total > order.target) level.onMessage?.('주문보다 많아요. 마지막 조각을 취소해 보세요.', false);
           paint();
         }
         pad.occupied = occupied;
@@ -126,14 +160,16 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
       door.userData.collider.enabled = lift < 0.95;
     } });
     // 이 판의 주문량: 제목·구간 이름·주문량 그림이 함께 바뀐다
-    order.setTarget = (t) => {
+    order.setTarget = (t, bonus) => {
       order.target = t;
+      order.bonus = bonus;
       heading.set([`${title} · ${LABELS[t]}`]);
       order.reset();
     };
     order.heading = heading;
     order.reset = () => {
-      order.total = 0; order.pieces = []; order.solved = false; lift = 0;
+      order.total = 0; order.pieces = []; order.solved = false; order.bonusDone = false; lift = 0;
+      star.position.copy(HIDDEN);
       door.position.y = 4; door.userData.collider.enabled = true;
       order.pads.forEach((p) => { p.occupied = false; }); paint();
     };
@@ -155,7 +191,11 @@ export function buildPizza(parent, world, { seed = 1 } = {}) {
 
   level.setSeed = (s) => {
     level.seed = s;
-    level.orders.forEach((o, k) => o.setTarget(pick(rngFor(s, k), TARGET_POOLS[k])));
+    level.orders.forEach((o, k) => {
+      const rand = rngFor(s, k);
+      const target = pick(rand, TARGET_POOLS[k]);
+      o.setTarget(target, bonusCount(o.units, target, rand));
+    });
   };
   // 구간 이름(HUD)에 이 판의 주문량을 붙인다
   const baseSection = level.sectionAt;

@@ -84,4 +84,24 @@ for (const seed of [1, 2, 3]) for (const t0 of [0, 4]) {
   T.check('눈 구름 길 둔덕 너머 별에 닿을 수 있음', run(make(seed), [-12, 5.8, -68.5], [[-14.5, -68.5], [-20.5, -68.5]], { t0, maxT: 20 }));
   T.check('눈 구름 길에서 곧장 달려도 착지점 이어짐', run(m, [0, 7.5, -57], [[-12, -60], [-10, -78], [0, -79], [0, -91]], { t0, maxT: 60 }));
 }
+// 지하수 샘(선택): 걸어서 샘을 밟으면 천장 구멍으로 솟고, 지붕 쪽으로 움직이면 지붕에 내려서 별을 얻는다.
+// 지하수 길을 곧게 걷는 학생은 샘을 밟지 않는다(body-water.mjs water '지하수 길'이 x 5.5로 통과).
+for (const seed of [1, 5]) {
+  const m = make(seed);
+  const p = new Player(new THREE.Scene());
+  p.respawn(new THREE.Vector3(5.5, 1.5, -103), 0);
+  let t = 0, phase = 'walk', topY = 0;
+  for (; t < 12; t += S) {
+    let mx = 0, mz = 0;
+    if (phase === 'walk') { const dx = 7.6 - p.pos.x, dz = -108 - p.pos.z, d = Math.hypot(dx, dz); if (d < 0.3) phase = 'rise'; else { mx = dx / d; mz = dz / d; } }
+    if (phase === 'rise' && p.pos.y > 7.4) phase = 'steer';
+    if (phase === 'steer') { const dx = 5.5 - p.pos.x, dz = -116 - p.pos.z, d = Math.hypot(dx, dz); if (d > 0.4) { mx = dx / d; mz = dz / d; } }
+    m.level.update(t, S, p);
+    p.step(S, { x: mx, y: -mz }, 0, m.world, m.level.windAt, m.level.gravityAt);
+    topY = Math.max(topY, p.pos.y);
+  }
+  const star = m.level.stars.some((st) => st.got && Math.abs(st.mesh.position.x - 5.5) < 0.1 && Math.abs(st.mesh.position.z + 116) < 0.1);
+  T.check(`지하수 샘으로 지붕에 올라 별 (seed ${seed})`, { ok: star && p.pos.y > 6.9, why: `topY=${topY.toFixed(2)} y=${p.pos.y.toFixed(2)} star=${star}` });
+  T.check(`지붕에서 강 하구로 내려가 이어짐 (seed ${seed})`, run(m, [5.5, 7, -116], [[5.5, -121], [3, -123.5], [0, -124]], { maxT: 20 }));
+}
 T.report();

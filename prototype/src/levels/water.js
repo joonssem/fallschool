@@ -147,8 +147,12 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   platform(5.5, 1.5, -101, 7, 7, C.soil);
   platform(5.5, 1.5, -108, 7, 7, C.soil);
   platform(5.5, 1.5, -115, 7, 7, C.soil);
-  block(5.5, 7, -108, 7, 1, 27, C.cave); // 동굴 천장
+  // 동굴 천장: 가운데 동쪽에 샘 구멍(x 5.5~9, z -106.5~-109.5)을 남긴다
+  block(5.5, 7, -100.5, 7, 1, 12, C.cave);
+  block(5.5, 7, -115.5, 7, 1, 12, C.cave);
+  block(3.75, 7, -108, 3.5, 1, 3, C.cave);
   for (const x of [1.5, 9.5]) block(x, 5.5, -108, 1, 3, 27, C.cave); // 동굴 옆벽
+  buildSpring();
   for (const z of [-101, -108, -115]) {
     const glow = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), mat(0x7bdff2, { emissive: 0x2a9dba, emissiveIntensity: 0.45 }));
     glow.position.set(5.5, 3.5, z);
@@ -229,6 +233,19 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
         k.f.position.set(k.x + Math.sin(t * 0.8 + k.phase * 20) * 0.5, 12 - h * 9, k.z);
       }
     } });
+  }
+
+  // 지하수 샘(선택): 지하수 길의 동쪽 가장자리. 땅속을 흐르던 물이 솟아나는 샘을 튕겨 오르는 발판으로 표현했다(게임 과장).
+  // 천장 구멍으로 솟아 동굴 지붕에 내려서면 별. 지표수 길(물살이 밀어 빠르다), 빙하 길(미끄러운 얼음)과 다른 보상이다.
+  // 걷는 길(x 2.5~6)과 떨어져 있어 모르고 밟지 않는다. 지붕에서는 강 하구로 뛰어내린다(높이 약 5.5m, 안전한 바닥).
+  function buildSpring() {
+    const SX = 7.6, SZ = -108;
+    platform(SX, Y + 0.15, SZ, 2, 2.4, 0x7bdff2, { kind: 'bounce', bounceSpeed: 19 });
+    const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 5, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide }));
+    jet.position.set(SX, Y + 3, SZ); root.add(jet);
+    movers.push({ root: null, update(t) { jet.scale.y = 0.85 + Math.sin(t * 4) * 0.15; } });
+    challengeStar(5.5, 7 + 0.01, -116); // 지붕 위 (지붕 윗면 7)
+    sign('지하수 샘 (선택)', 10.6, 4.4, -111, { width: 4.2, color: '#167d9a', lines: ['지하수 샘 (선택)', '땅속 물이 솟아나는 곳', '타고 올라 지붕의 별까지!'], rotY: -0.5 });
   }
 
   // 빙하 길(선택): 얼음(고체) 위는 미끄럽다. 달리면 멈추기까지 미끄러지니 얼음 기둥 사이를 돌아 나간다.

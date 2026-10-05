@@ -31,7 +31,8 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     const item = { sources, region, wind }; zones.push(item); return item;
   }
   level.windZones = zones;
-  level.windAt = (pos, out) => { for (const z of zones) z.wind(pos, out); };
+  // 연 발판 위는 바람에 밀리지 않는다(가만히 서 있어도 떨어지지 않게 - 조작 부담을 늘리지 않는다)
+  level.windAt = (pos, out) => { if (level.kite?.shelters(pos)) return; for (const z of zones) z.wind(pos, out); };
   function region(xMin, xMax, zMin, zMax) { return { xMin, xMax, zMin, zMax, yMin: -0.5, yMax: 8 }; }
   function marker(text, x, y, z, c) {
     sign(text, x, y, z, { width: 3, color: c });
@@ -80,7 +81,7 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
   // 2. 두 길: 압력 배열이 서로 반대라 왼쪽은 순풍, 오른쪽은 역풍이다.
   const fork = road(0, 0, -31, 26, 10);
   checkpoint(fork, new THREE.Vector3(0, 0, -29), '고기압·저기압 갈림길');
-  sign('어느 길이 등을 밀어 줄까요?', 0, 4, -34, { width: 7, lines: ['H: 고기압 / L: 저기압', '지표 바람은 높은 쪽에서 낮은 쪽', '역풍 길도 건널 수 있어요'] });
+  sign('어느 길이 등을 밀어 줄까요?', 0, 4, -34, { width: 7, lines: ['H: 고기압 / L: 저기압', '지표 바람은 높은 쪽에서 낮은 쪽', '순풍 길엔 도약대, 역풍 길엔 연 발판'] });
   for (const x of [-7, 7]) {
     road(x, 0, -49, 8, 28, x < 0 ? 0xbce5cf : 0xf4ccaa);
     const forward = x < 0;
@@ -91,6 +92,7 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     gauge(x, 1.2, -49, field);
   }
   buildTailwindJump();
+  buildHeadwindKite(zones.at(-1));
   road(0, 0, -67, 26, 10);
   sign('바람 세기', 10, 3.5, -66, { width: 5, lines: ['압력이 가파르게 변하는 곳', '바람이 더 세게 불어요'] });
 
@@ -199,6 +201,39 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     level.stars.push({ mesh: star, got: false });
   }
 
+  // 맞바람 연 발판(선택): 오른쪽 역풍 길에만 있다. 연은 바람을 마주 볼 때 뜬다는 생활 경험을 게임 장치로 쓴 것.
+  // 누군가 올라서 있으면 발판 위치의 맞바람(진행 반대 방향 바람) 세기만큼 올라가고, 비면 내려온다. 꼭대기 옆 섬에 별.
+  // 순풍 길에 같은 발판을 두면 뜨지 않는다(시험으로 확인). 위치는 이 화면 학생 + 다른 학생 위치로 정한다(시소와 같은 방식).
+  function buildHeadwindKite(field) {
+    const KX = 9.3, KZ = -52, TOP = 5.5, BASE = 0.15;
+    const pad = platform(KX, BASE, KZ, 2.4, 2.4, 0xf28482, { dynamic: true, thick: 0.4 });
+    const kite = new THREE.Mesh(new THREE.ConeGeometry(1.2, 0.2, 4), mat(0xf28482, { side: THREE.DoubleSide }));
+    kite.rotation.x = Math.PI / 2; level.root.add(kite);
+    const string = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 4), mat(0xffffff)); level.root.add(string);
+    challengeStar(13, TOP, KZ);
+    sign('연 발판 (선택)', 4.2, 3.4, -45.5, { width: 4.6, color: '#c0392b', lines: ['연 발판 (선택)', '연은 바람을 마주 볼 때 높이 떠요', '맞바람이 불면 올라가 별까지!'], rotY: -0.5 });
+    const probe = new THREE.Vector3(KX, 1, KZ), w = new THREE.Vector3();
+    const kiteState = { height: 0, rate: 0 };
+    level.kite = { pad, x: KX, z: KZ, top: TOP, base: BASE, state: kiteState, field };
+    level.movers.push({ root: pad, update(t, dt, player) {
+      // 올라탄 사람: 발판 윗면 근처에 서 있는 이 화면 학생과 다른 학생 (발판이 움직일 때 접촉이 잠깐 끊겨도 흔들리지 않게 위치로 본다)
+      const top = pad.position.y + 0.2;
+      const on = (q) => Math.abs(q.x - KX) < 1.4 && Math.abs(q.z - KZ) < 1.4 && q.y > top - 0.4 && q.y < top + 1.2;
+      const feet = [];
+      if (player && on(player.pos)) feet.push(player.pos);
+      for (const o of level.getOthers?.() || []) if (on(o)) feet.push(o);
+      w.set(0, 0, 0); field.wind(probe, w);
+      const headwind = Math.max(0, w.z); // +z: 진행 방향(-z)의 반대에서 불어오는 바람
+      kiteState.rate = feet.length ? Math.min(1.6, headwind * 0.75) : -2;
+      kiteState.height = THREE.MathUtils.clamp(kiteState.height + kiteState.rate * dt, 0, TOP - BASE);
+      pad.position.y = BASE - 0.2 + kiteState.height;
+      kite.position.set(KX, pad.position.y + 4.2 + Math.sin(t * 2) * 0.2, KZ - 2.5);
+      string.position.set(KX, pad.position.y + 2.1, KZ - 1.25); string.scale.y = 4.4; string.rotation.x = -0.5;
+    } });
+    level.kite.shelters = (p) => Math.abs(p.x - KX) < 1.3 && Math.abs(p.z - KZ) < 1.3 && p.y > pad.position.y && p.y < pad.position.y + 2;
+    level.kite.reset = () => { kiteState.height = 0; pad.position.y = BASE - 0.2; };
+  }
+
   // 압력의 같은 음의 기울기가 화살표·풍향계·깃발·입자를 움직인다.
   const wind = new THREE.Vector3(); const direction = new THREE.Vector3();
   const particles = [];
@@ -231,7 +266,7 @@ export function buildWindVillage(parent, world, { seed = 1 } = {}) {
     showBreeze(changing ? ['낮밤이 바뀌는 중', '잠시 바람이 약해져요'] : day ? ['낮 · 해풍', '바다 H → 육지 L', '바다에서 육지로 불어요'] : ['밤 · 육풍', '육지 H → 바다 L', '육지에서 바다로 불어요']);
   } };
   level.movers.unshift(initialUpdate);
-  level.setSeed = (s) => { level.seed = s; time = 0; particles.forEach((p) => p.dot.position.copy(p.initial)); };
+  level.setSeed = (s) => { level.seed = s; time = 0; particles.forEach((p) => p.dot.position.copy(p.initial)); level.kite.reset(); };
   finalizeLevel(level);
   const resetProgress = level.resetProgress;
   level.resetProgress = () => { resetProgress(); level.setSeed(level.seed); };

@@ -134,7 +134,9 @@ const zSec = z12 - 4.5; // 맞바람·돌풍 구간이 시작하는 z (앞 체�
 {
   const { level } = build();
   const o = new THREE.Vector3();
-  const tStrong = WD.calm + WD.ramp + WD.strong / 2; // 첫 돌풍(front)의 한가운데
+  // 앞바람(front) 돌풍의 한가운데 (돌풍 순서는 시드로 섞이므로 front가 나오는 돌풍을 찾는다)
+  let kFront = 0; while (level.gustAt(kFront * GPERIOD + 0.01).name !== 'front') kFront++;
+  const tStrong = kFront * GPERIOD + WD.calm + WD.ramp + WD.strong / 2;
   const g = level.gustAt(tStrong);
   const open = new THREE.Vector3(5.2, 5, zSec - 1.5); // 벽이 없는 가장자리
   level.update(tStrong, S, null); // 마지막 갱신 시각을 맞춘다
@@ -231,6 +233,25 @@ function gustRun(t0) {
   T.check('시소 안전 길(외길)로 시험 구간 입구까지', run(m, [0, 5, -180], [[-7.5, -183.5], [-9, -190], [-9, -204], [-9, -218], [-7.5, -226], [0, z5]], { maxT: 60 }));
   const seesawMid = run(build(), [-9, 5, -190], [[-9, -218]], { nojump: true, maxT: 30 });
   T.check('외길을 점프 없이도 곧게 걸어서 통과', seesawMid);
+}
+// 돌풍 순서: 시드로 섞인다(같은 시드는 같다), 한 바퀴에 모든 방향이 한 번씩, 같은 방향이 연달아 나오지 않는다
+{
+  const seq = (seed, n = 40) => { const { level } = build(seed); return Array.from({ length: n }, (_, k) => level.gustAt(k * GPERIOD + 0.01).name); };
+  const a = seq(3), b = seq(3);
+  T.check('돌풍 순서: 같은 시드는 같은 순서(모든 화면이 같음)', { ok: a.join() === b.join(), why: '' });
+  const orders = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((s) => seq(s, WD.dirs.length * 2).join()));
+  T.check('돌풍 순서: 시드에 따라 다른 순서가 나옴', { ok: orders.size >= 3, why: `${orders.size}가지` });
+  let fair = true, repeat = false;
+  for (const s of [1, 2, 3, 4, 5]) {
+    const q = seq(s);
+    for (let c = 0; c + WD.dirs.length <= q.length; c += WD.dirs.length) if (new Set(q.slice(c, c + WD.dirs.length)).size !== new Set(WD.dirs).size) fair = false;
+    for (let k = 1; k < q.length; k++) if (q[k] === q[k - 1]) repeat = true;
+  }
+  T.check('돌풍 순서: 한 바퀴 안에 모든 방향이 한 번씩', { ok: fair, why: '' });
+  T.check('돌풍 순서: 같은 방향이 연달아 나오지 않음', { ok: !repeat, why: '' });
+  const { level } = build(3); const before = seq(3, 6).join(); level.setSeed(4);
+  const after = Array.from({ length: 6 }, (_, k) => level.gustAt(k * GPERIOD + 0.01).name).join();
+  T.check('돌풍 순서: 새 경기(시드)에서 다시 섞임', { ok: after === seq(4, 6).join() && (after !== before || seq(3, 12).join() !== seq(4, 12).join()), why: `${before} / ${after}` });
 }
 // 골인
 T.check('골인 언덕·결승 (시험 구간 뒤)', run(build(), [0, 5, z13], [[0, z13 - 9], [0, z13 - 21], [0, z13 - 26]], { maxT: 60 }));
