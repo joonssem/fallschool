@@ -14,10 +14,12 @@ import { buildShadowTheater } from './shadowtheater.js';
 import { buildRobotCity } from './robotcity.js';
 import { buildIceTaxi } from './icetaxi.js';
 import { buildEchoDetective } from './echodetective.js';
+import { buildMagnetHarbor } from './magnetharbor.js';
+import { buildSentenceTrain } from './sentencetrain.js';
 
 // 맵 항목: id, name, build + (선택) subject(분류), blurb(한 줄 설명), coop(친구와 함께 해야 하는 장치가 있나)
 // 선택 화면은 subject 로 묶어 보여 준다. 적지 않으면 '기타'.
-export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명', '수학', '미술', '정보'];
+export const SUBJECTS = ['연습', '물리', '화학', '지구·우주', '생명', '수학', '국어', '미술', '정보'];
 
 export const MAPS = [
   { id: 'lab', name: '점프 연구소 시험장', subject: '연습', blurb: '이동·점프·다이브 연습, 기울어지는 시소', coop: true, build: buildLevel },
@@ -38,6 +40,8 @@ export const MAPS = [
   { id: 'robotcity', name: '명령 택배 로봇 도시', subject: '정보', blurb: '명령을 고쳐 배송하고 길을 열어요', coop: false, build: buildRobotCity },
   { id: 'icetaxi', name: '열을 지키는 얼음 택배', subject: '물리', blurb: '포장과 길을 골라 얼음을 배달해요', coop: false, build: buildIceTaxi },
   { id: 'echodetective', name: '메아리 탐정단', subject: '물리', blurb: '반사 신호로 동굴을 탐험해요', coop: false, build: buildEchoDetective },
+  { id: 'magnetharbor', name: '자석 항구', subject: '물리', blurb: '자석으로 화물을 옮겨 길을 만들어요', coop: false, build: buildMagnetHarbor },
+  { id: 'sentencetrain', name: '문장 구조 열차', subject: '국어', blurb: '길을 골라 네 가지 이야기를 만들어요', coop: false, build: buildSentenceTrain },
 ];
 
 // 분류별로 묶기: [[분류, [맵…]], …] (SUBJECTS 순서, 모르는 분류는 뒤에)
