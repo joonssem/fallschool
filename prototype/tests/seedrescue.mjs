@@ -6,7 +6,7 @@ import { mapById } from '../src/levels/index.js';
 const T = tally('씨앗 구조대');
 const fresh = (seed = 3) => { const world = new PhysicsWorld(); return { world, level: buildSeedRescue(new THREE.Scene(), world, { seed }) }; };
 T.check('생명 분류에 맵 등록', { ok: mapById('seedrescue').subject === '생명' && mapById('seedrescue').build === buildSeedRescue, why: '' });
-T.check('체크포인트 7곳 이상, 출발~결승 약 242m', { ok: fresh().level.checkpoints.length >= 7 && Z.finish === -238, why: String(fresh().level.checkpoints.length) });
+T.check('체크포인트 8곳 이상, 출발~결승 약 242m', { ok: fresh().level.checkpoints.length >= 8 && Z.finish === -238, why: String(fresh().level.checkpoints.length) });
 
 // 예상 발판에 올라서서 secs초 서 있는다(레벨 상태는 그대로 이어진다).
 const standOn = (m, x, z, secs) => { const p = new Player(new THREE.Scene()); p.respawn(new THREE.Vector3(x, 1.2, z), 0);

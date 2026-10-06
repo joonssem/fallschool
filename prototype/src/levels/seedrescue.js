@@ -202,6 +202,7 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
   const warmPotMesh = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.35, 4.4), mat(0xb5703d)); warmPotMesh.position.set(0, 1.05, Z.warmPlanter); warm.group.add(warmPotMesh);
   const warmSign = sign('온실', 0, 4.6, Z.warmPlanter + 3.2, { width: 4, lines: ['온실', '25℃ · 따뜻해요'], color: '#c0602a' });
   const warmSprout = sprout(0, Z.warmPlanter - 1);
+  checkpoint(platform(8, 1.04, -146, 5, 4, 0xb8dda0), new THREE.Vector3(8, 1, -146), '다리 앞(온도)'); // -112 → -173 구간(61m)을 둘로 나눈다
   const fence2 = fence(Z.bridge2[0]);
   bridge('temp', Z.bridge2[0], Z.bridge2[1], 6.4, 0x68b766);
   const tempNote = dynamicSign(root, { x: 0, y: 4.2, z: Z.bridge2[0] + 0.7, width: 6, rows: 2, color: '#4f8a3c' });
