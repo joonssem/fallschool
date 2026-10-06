@@ -1,4 +1,4 @@
-// 유적 발굴 현장: 지표 단서를 읽고, 흙을 파 길을 내며, 기록한 유물을 전시하는 첫 체험 맵.
+// 유적 발굴 현장: 지표 단서를 읽고, 흙을 파 계단 지름길을 내며, 기록한 유물로 전시 문을 여는 첫 체험 맵.
 import * as THREE from 'three';
 import { createLevel, finalizeLevel, makeKit } from './kit.js';
 import { dynamicSign, rngFor, shuffled } from './variants.js';
@@ -7,7 +7,17 @@ export const GRID_SIZE = 4;
 export const LAYER_COUNT = 2;
 export const SHOVEL_LAYERS = 2;
 export const SHOVEL_FRAGMENTS = 3;
-export const TROWEL_BREAK_CHANCE = 0.25;
+export const FRAGILE_COUNT = 1; // 시드마다 금이 간 유물 한 개. 단서판과 표식으로 미리 보인다
+// 큰 삽 지름길: 파낸 흙이 두 단 계단이 되어 흙벽을 넘는다. 옆 우회로로도 갈 수 있다.
+export const WALL = Object.freeze({ z: -74, depth: 4.4, top: 2.8, halfWidth: 8 });
+export const STEP_TOPS = Object.freeze([1.4, 2.8]);
+export const STEP_Z = Object.freeze([-65, -69.5]);
+export const STEP_DEPTHS = Object.freeze([4.4, 4.6]);
+export const BYPASS = Object.freeze({ x: 12.5, z: -74, width: 9, depth: 20 });
+// 전시 문: 복원·기록 결과에 따라 문 자리가 옆으로 비껴 간다. 온전하면 곧장, 비어 있으면 돌아서 지난다.
+export const GATE_SIDES = Object.freeze([-1, 1, -1]);
+export const DOOR_SHIFT = Object.freeze({ whole: 0, unrecorded: 2.5, partial: 4.4, blank: 5.6 });
+export const GATE_WALL = Object.freeze({ height: 3.2, depth: 0.8, halfWidth: 7.2 });
 export const DISPLAY_WIDTHS = Object.freeze({ whole: 7.2, unrecorded: 5, partial: 3.6, blank: 2.8 });
 export const JUMP_DIVE_DISTANCE = 8;
 export const TOOLS = Object.freeze(['큰 삽', '모종삽', '붓']);
@@ -32,12 +42,14 @@ export function plotLayout(seed) {
   const hiddenType = objects[0].id;
   const hiddenSlot = slots[0];
   const assignments = Array(4).fill(null);
-  objects.forEach((artifact, i) => { assignments[slots[i]] = { ...artifact, depth: artifact.layer + 1, fragile: rngFor(seed, 620 + i)() < TROWEL_BREAK_CHANCE }; });
+  const fragileIndex = Math.floor(rngFor(seed, 620)() * objects.length);
+  objects.forEach((artifact, i) => { assignments[slots[i]] = { ...artifact, depth: artifact.layer + 1, fragile: i === fragileIndex }; });
   return PLOT_X.map((x, i) => {
     const artifact = assignments[i];
     return {
       id: String.fromCharCode(65 + i), x, z: Z.plot + (i % 2 ? 3 : -3),
       artifact, layers: LAYER_COUNT, clue: artifact ? artifact.clue : '흔적이 있어도 유물이 없는 칸일 수 있어요',
+      crack: !!artifact?.fragile,
       faint: !!artifact && artifact.id === hiddenType,
       hidden: !!artifact && i === hiddenSlot,
     };
@@ -121,11 +133,16 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     const cue = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.13, 0.45), new THREE.MeshStandardMaterial({ color: cueColor }));
     cue.position.set(0, 0.37, -0.55);
     mound.add(cue);
-    const clueBoard = dynamicSign(level.root, { x: plot.x, y: 2.7, z: plot.z + 1.4, width: 3.4, rows: 2, color: '#6a4c93' });
-    clueBoard.set([`${plot.id} 구덩이`, plot.clue]);
+    const crackMark = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.03, 0.07), new THREE.MeshStandardMaterial({ color: 0x3b2a20 }));
+    crackMark.position.set(0, 0.45, -0.55);
+    crackMark.rotation.y = 0.6;
+    crackMark.visible = false;
+    mound.add(crackMark);
+    const clueBoard = dynamicSign(level.root, { x: plot.x, y: 2.9, z: plot.z + 1.4, width: 3.4, rows: 3, color: '#6a4c93' });
+    clueBoard.set([`${plot.id} 구덩이`, plot.clue, '']);
     const pad = platform(plot.x, 0.1, plot.z - 1.8, TRIGGER_SIZE, TRIGGER_SIZE, 0xb08968);
     const deepPad = platform(plot.x, 0.1, plot.z - 5.6, TRIGGER_SIZE, TRIGGER_SIZE, 0x987554);
-    const p = { ...plot, pad, deepPad, soils, cue, clueBoard, dugLayers: 0, found: false, fragments: 0, recorded: false, restored: false, armed: true, deepArmed: true, hitCount: 0 };
+    const p = { ...plot, pad, deepPad, soils, cue, crackMark, clueBoard, dugLayers: 0, found: false, fragments: 0, recorded: false, restored: false, armed: true, deepArmed: true, hitCount: 0 };
     siteVisuals.push(p);
     pad.userData.collider.onStand = (player) => {
       if (!p.armed || player.ground !== pad.userData.collider) return;
@@ -169,19 +186,21 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
   }
 
   const rubbleParts = [];
-  // 숨은 흙덩이는 보이지 않고 충돌도 없다. 발굴하면 흙더미 발판으로 함께 바뀐다.
+  // 숨은 흙덩이는 보이지 않고 충돌도 없다. 발굴하면 흙 계단(1.4m → 2.8m)이 되어 흙벽 위로 이어진다.
   const rubbleLaneX = [-6, -2, 2, 6];
   for (let i = 0; i < siteVisuals.length * LAYER_COUNT; i++) {
     const plotIndex = Math.floor(i / LAYER_COUNT);
     const layer = i % LAYER_COUNT;
-    const dirt = block(rubbleLaneX[plotIndex], -12, -63 - layer * 4, 3.2, 0.3, 4.4, BASE_COLORS.dirt, { dynamic: true });
+    const dirt = block(rubbleLaneX[plotIndex], -12, STEP_Z[layer], 3.2, STEP_TOPS[layer], STEP_DEPTHS[layer], BASE_COLORS.dirt, { dynamic: true });
     dirt.visible = false;
     dirt.userData.collider.enabled = false;
     rubbleParts.push(dirt);
   }
-  const shovelSpring = platform(6.3, 0.18, -67, 4, 4, 0xff7b00, { kind: 'bounce', bounceSpeed: 14 });
-  shovelSpring.visible = false;
-  shovelSpring.userData.collider.enabled = false;
+  // 흙벽은 길 전체를 막는다. 옆 우회로(기본 길)로 돌아가거나, 파낸 흙 계단으로 넘는 지름길을 낸다.
+  block(0, WALL.top, WALL.z, WALL.halfWidth * 2, WALL.top, WALL.depth, 0x7a5c45);
+  platform(BYPASS.x, 0, BYPASS.z, BYPASS.width, BYPASS.depth, BASE_COLORS.path);
+  sign('흙벽이에요. 옆 우회로로 돌아가거나, 파낸 흙 계단으로 넘어가요', 0, 5.4, -61, { width: 11, color: '#6d4c41' });
+  sign('우회로', BYPASS.x, 3, -64, { width: 3 });
   function addRubble(plot, layer, tool) {
     const plotIndex = siteVisuals.indexOf(plot);
     const part = rubbleParts[plotIndex * LAYER_COUNT + layer];
@@ -189,12 +208,11 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     part.userData.collider.enabled = true;
     const width = tool === '큰 삽' ? 4.4 : tool === '붓' ? 2.8 : 3.6;
     part.scale.x = width / 3.2;
-    part.position.set(rubbleLaneX[plotIndex], 0.15 + Math.min(0.15, layer * 0.05), -63 - layer * 4);
+    part.position.set(rubbleLaneX[plotIndex], STEP_TOPS[layer] / 2, STEP_Z[layer]);
     part.updateMatrixWorld(true);
     part.userData.collider.sync(true);
     state.rubble.push({ plot: plot.id, layer, tool, mesh: part, width });
   }
-  sign('파낸 흙이 옆의 흙길이 돼요. 원래 길도 그대로 걸을 수 있어요.', 0, 4.2, -57, { width: 10 });
   const undoPad = platform(9, 0.1, -56, 3.2, 3.2, 0xadb5bd);
   let undoArmed = true;
   sign('빈 칸이면 덮고 다른 칸을 살펴봐요', 9, 2.8, -54.2, { width: 4.2 });
@@ -259,19 +277,30 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
   });
   sign('온전한 유물은 넓은 받침, 조각이 남은 유물은 좁은 받침이 돼요.', 0, 4.2, -116, { width: 9 });
 
+  // 전시 문: 문 자리가 결과에 따라 옆으로 비껴 간다(온전하면 곧장, 비어 있으면 돌아서). 모두 걸어서 지날 수 있고 떨어지지 않는다.
   const displayOrder = [...ARTIFACTS].sort((a, b) => a.layer - b.layer);
-  const displaySpecs = displayOrder.map((a, i) => ({ artifact: a, x: [-4.2, 0, 4.2][i], z: Z.exhibit - i * 7, options: [] }));
+  const MODES = ['whole', 'unrecorded', 'partial', 'blank'];
+  const wallColor = 0xb8a58c;
+  const doorX = (index, mode) => GATE_SIDES[index] * DOOR_SHIFT[mode];
+  const displaySpecs = displayOrder.map((a, i) => ({ artifact: a, index: i, z: Z.exhibit - i * 7, options: [] }));
   for (const spec of displaySpecs) {
-    const widths = [DISPLAY_WIDTHS.whole, DISPLAY_WIDTHS.unrecorded, DISPLAY_WIDTHS.partial, DISPLAY_WIDTHS.blank];
-    for (let i = 0; i < widths.length; i++) {
-      const mesh = platform(spec.x, 0.1, spec.z, widths[i], 6, [spec.artifact.hue, spec.artifact.hue, 0xc9a27e, 0xbdbdbd][i]);
-      mesh.visible = false;
-      mesh.userData.collider.enabled = false;
-      spec.options.push({ mesh, width: widths[i], mode: ['whole', 'unrecorded', 'partial', 'blank'][i] });
+    for (const mode of MODES) {
+      const width = DISPLAY_WIDTHS[mode];
+      const cx = doorX(spec.index, mode);
+      const slab = platform(cx, 0.1, spec.z, width, 6, mode === 'partial' ? 0xc9a27e : mode === 'blank' ? 0xbdbdbd : spec.artifact.hue);
+      const walls = [];
+      const edges = [[-GATE_WALL.halfWidth, cx - width / 2], [cx + width / 2, GATE_WALL.halfWidth]];
+      for (const [a, b] of edges) {
+        if (b - a < 0.3) continue;
+        const wall = block((a + b) / 2, GATE_WALL.height, spec.z, b - a, GATE_WALL.height, GATE_WALL.depth, wallColor);
+        walls.push(wall);
+      }
+      for (const m of [slab, ...walls]) { m.visible = false; m.userData.collider.enabled = false; }
+      spec.options.push({ mesh: slab, walls, width, mode, doorX: cx });
     }
-    spec.sign = dynamicSign(level.root, { x: spec.x, y: 2.7, z: spec.z - 2.8, width: 3.8, rows: 2, color: '#6a4c93' });
+    spec.sign = dynamicSign(level.root, { x: 0, y: 4.6, z: spec.z - 0.6, width: 4.4, rows: 2, color: '#6a4c93' });
   }
-  // 바닥은 전시대 사이에서 0.8m 이내로 이어져 있고, 전시대 폭만 결과에 따라 달라진다.
+  // 바닥은 이어져 있고, 전시 문의 자리만 결과에 따라 달라진다.
   platform(0, 0, -143, 14, 18, 0x9aa0a6);
   platform(0, 0, -178, 14, 18, 0x88b04b);
   function updateDisplay() {
@@ -279,15 +308,14 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     displaySpecs.forEach((spec) => {
       const find = state.finds.find((f) => f.type === spec.artifact.id);
       const restoration = state.restorations.find((r) => r.type === spec.artifact.id);
-      const mode = !restoration ? DISPLAY_WIDTHS.blank : restoration.result === 'partial' ? DISPLAY_WIDTHS.partial : restoration.recorded ? DISPLAY_WIDTHS.whole : DISPLAY_WIDTHS.unrecorded;
+      const mode = !restoration ? 'blank' : restoration.result === 'partial' ? 'partial' : restoration.recorded ? 'whole' : 'unrecorded';
       for (const o of spec.options) {
-        const enabled = o.width === mode;
-        o.mesh.visible = enabled;
-        o.mesh.userData.collider.enabled = enabled;
+        const enabled = o.mode === mode;
+        for (const m of [o.mesh, ...o.walls]) { m.visible = enabled; m.userData.collider.enabled = enabled; }
       }
-      spec.sign.visible = !!(find && restoration);
-      spec.sign.set(find && restoration ? [`${spec.artifact.name} · ${find.layer + 1}층`, restoration.recorded ? '자리 기록 있음' : '자리 기록 없음'] : ['빈 전시대', '좁지만 건널 수 있어요']);
-      state.display.push({ type: spec.artifact.id, width: mode, recorded: !!restoration?.recorded, layer: find?.layer ?? null });
+      spec.sign.mesh.visible = true;
+      spec.sign.set(find && restoration ? [`${spec.artifact.name} · ${find.layer + 1}층`, restoration.recorded ? '자리 기록 있음 · 문이 곧장 열려요' : '자리 기록 없음'] : ['빈 전시 문', '발굴하지 않아 문이 옆으로 비껴 있어요']);
+      state.display.push({ type: spec.artifact.id, width: DISPLAY_WIDTHS[mode], mode, doorX: doorX(spec.index, mode), gateZ: spec.z, recorded: !!restoration?.recorded, layer: find?.layer ?? null });
     });
   }
   updateDisplay();
@@ -297,13 +325,14 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     { x: -11, y: 0, z: -135, mode: 'perfect', name: '붓으로 온전 발굴' },
     { x: -11, y: 0, z: -145, mode: 'hidden', name: '희미한 단서 구덩이' },
     { x: 11, y: 0, z: -135, mode: 'records', name: '층·칸 기록' },
-    { x: 11, y: 0, z: -68, mode: 'shovel', name: '큰 삽 흙길 점프' },
+    { x: 0, y: WALL.top, z: WALL.z, mode: 'shovel', name: '큰 삽 흙 계단 지름길 별' },
   ];
   const starChallenges = starSpecs.map((s) => {
-    const island = platform(s.x, 0.1, s.z, 3.2, 3.2, 0xffe066);
-    island.userData.collider.enabled = false;
+    // 흙벽 위 별은 벽 윗면이 곧 발판이다. 다른 별은 별 섬을 따로 둔다.
+    const island = s.mode === 'shovel' ? null : platform(s.x, 0.1, s.z, 3.2, 3.2, 0xffe066);
+    if (island) island.userData.collider.enabled = false;
     const priorColliderCount = world.colliders.length;
-    challengeStar(s.x, 0.1, s.z);
+    challengeStar(s.x, s.y, s.z);
     world.colliders[priorColliderCount].enabled = false;
     const star = level.stars.at(-1);
     star.mesh.position.set(s.x, -1000, s.z);
@@ -314,10 +343,9 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     const spec = starChallenges.find((s) => s.mode === mode);
     if (!spec || spec.shown || state.method !== spec.methodTool) return;
     spec.shown = true;
-    spec.island.userData.collider.enabled = true;
-    spec.star.mesh.position.set(spec.x, 1.5, spec.z);
+    if (spec.island) spec.island.userData.collider.enabled = true;
+    spec.star.mesh.position.set(spec.x, spec.y + 1.5, spec.z);
     spec.star.mesh.visible = true;
-    if (mode === 'shovel') { shovelSpring.visible = true; shovelSpring.userData.collider.enabled = true; }
   }
   starChallenges[0].methodTool = '붓';
   starChallenges[1].methodTool = '모종삽';
@@ -355,14 +383,12 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
       p.pad.material?.color?.setHex(0xb08968);
     }
     rubbleParts.forEach((m) => { m.visible = false; m.userData.collider.enabled = false; m.position.set(0, -12, -63); });
-    shovelSpring.visible = false;
-    shovelSpring.userData.collider.enabled = false;
     for (const entry of [...toolPads, ...recordPads, ...restorePads]) entry.armed = true;
     undoArmed = true;
     state.rubble = [];
     state.plots = siteVisuals;
     updateDisplay();
-    starChallenges.forEach((s) => { s.shown = false; s.island.userData.collider.enabled = false; s.star.mesh.position.set(s.x, -1000, s.z); s.star.mesh.visible = false; });
+    starChallenges.forEach((s) => { s.shown = false; if (s.island) s.island.userData.collider.enabled = false; s.star.mesh.position.set(s.x, -1000, s.z); s.star.mesh.visible = false; });
   }
   function applyLayout(nextSeed) {
     const layout = plotLayout(nextSeed);
@@ -370,9 +396,10 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     state.hiddenSite = layout.find((p) => p.hidden)?.id ?? null;
     layout.forEach((next, i) => {
       const old = siteVisuals[i];
-      old.artifact = next.artifact; old.clue = next.clue; old.hidden = next.hidden; old.faint = next.faint;
+      old.artifact = next.artifact; old.clue = next.clue; old.hidden = next.hidden; old.faint = next.faint; old.crack = next.crack;
       old.cue.material.color.setHex(next.artifact?.hue ?? 0x9c8b78);
-      old.clueBoard.set([`${old.id} 구덩이`, `${next.faint ? '희미한 흔적: ' : ''}${next.clue}`], next.hidden ? '#9b5de5' : '#6a4c93');
+      old.crackMark.visible = !!next.crack;
+      old.clueBoard.set([`${old.id} 구덩이`, `${next.faint ? '희미한 흔적: ' : ''}${next.clue}`, next.crack ? '금이 간 조각이 보여요' : ''], next.hidden ? '#9b5de5' : '#6a4c93');
       old.soils.forEach((m, layer) => { m.material.color.setHex(layer === 0 ? (next.artifact?.hue ?? 0xb08968) : 0x6f4e37); });
       const cells = level.excavation?.cells;
       if (cells) {
@@ -386,14 +413,14 @@ export function buildExcavation(parent, world, { seed = 1 } = {}) {
     });
   }
   level.excavation = state;
-  level.excavation.constants = { GRID_SIZE, LAYER_COUNT, SHOVEL_LAYERS, SHOVEL_FRAGMENTS, TROWEL_BREAK_CHANCE, DISPLAY_WIDTHS, JUMP_DIVE_DISTANCE };
+  level.excavation.constants = { GRID_SIZE, LAYER_COUNT, SHOVEL_LAYERS, SHOVEL_FRAGMENTS, FRAGILE_COUNT, DISPLAY_WIDTHS, DOOR_SHIFT, GATE_SIDES, WALL, STEP_TOPS, BYPASS, JUMP_DIVE_DISTANCE };
   level.excavation.sites = siteVisuals;
   level.excavation.tools = TOOLS;
-  level.excavation.displayMeshes = displaySpecs.map((d) => d.options.map((o) => ({ mesh: o.mesh, collider: o.mesh.userData.collider })));
+  level.excavation.displayMeshes = displaySpecs.map((d) => d.options.map((o) => ({ mesh: o.mesh, collider: o.mesh.userData.collider, walls: o.walls })));
   level.excavation.cells = siteVisuals.flatMap((p) => Array.from({ length: LAYER_COUNT }, (_, layer) => ({ site: p.id, layer, hasArtifact: !!p.artifact && layer === p.artifact.layer, artifact: p.artifact?.id ?? null, clue: p.clue })));
   level.excavation.starChallenges = starChallenges;
   level.excavation.soilBlocks = rubbleParts.map((mesh) => ({ mesh, collider: mesh.userData.collider }));
-  level.excavation.shovelSpring = { mesh: shovelSpring, collider: shovelSpring.userData.collider };
+  level.excavation.gates = displaySpecs.map((d) => ({ z: d.z, side: GATE_SIDES[d.index], options: d.options }));
   function resetExcavation() {
     level.finished = false;
     level.stars.forEach((s) => { s.got = false; s.mesh.visible = false; });
