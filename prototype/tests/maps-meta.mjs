@@ -16,4 +16,18 @@ T.check('묶음이 모든 맵을 한 번씩', { ok: grouped.length === MAPS.leng
 const extra = mapsBySubject([...MAPS, { id: 'x', name: '새 맵', build() {} }]);
 T.check('분류 없는 맵은 기타로 맨 뒤', { ok: extra.at(-1)[0] === '기타' && extra.at(-1)[1][0].id === 'x', why: extra.map((g) => g[0]).join() });
 T.check('모르는 id는 첫 맵', { ok: mapById('nope').id === MAPS[0].id, why: '' });
+// 맵·문서 색인(docs/55): 등록된 모든 맵 id가 색인에 있고, 색인이 링크한 문서 파일이 실제로 있다
+import { readFileSync, existsSync } from 'node:fs';
+const docsDir = new URL('../../docs/', import.meta.url);
+const indexPath = new URL('55-맵-문서-색인.md', docsDir);
+T.check('맵·문서 색인 파일 있음', { ok: existsSync(indexPath), why: 'docs/55-맵-문서-색인.md' });
+if (existsSync(indexPath)) {
+  const index = readFileSync(indexPath, 'utf8');
+  for (const m of MAPS) {
+    T.check(`${m.id}: 색인에 있음`, { ok: index.includes('`' + m.id + '`'), why: 'docs/55에 `id` 행 필요' });
+  }
+  const links = [...index.matchAll(/\]\((\d{2}-[^)]+\.md)\)/g)].map((x) => x[1]);
+  const missing = [...new Set(links)].filter((f) => !existsSync(new URL(f, docsDir)));
+  T.check('색인이 링크한 문서가 모두 있음', { ok: missing.length === 0, why: missing.join() });
+}
 T.report();
