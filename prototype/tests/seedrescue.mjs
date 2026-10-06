@@ -1,6 +1,6 @@
 // 씨앗 구조대(세 정거장): 규칙·이동 시험. 조작은 봇이 실제로 걸어서 한다. 재미·학습 효과의 증거가 아니다.
 import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
-import { buildSeedRescue, SEED_TYPES, WATER_DROPS, HIGH_DECK, PETAL_ROWS, PETAL_X, Z, seedTypeFor, stationLayout, sproutResult } from '../src/levels/seedrescue.js';
+import { buildSeedRescue, PREDICT_DWELL, SEED_TYPES, WATER_DROPS, HIGH_DECK, PETAL_ROWS, PETAL_X, Z, seedTypeFor, stationLayout, sproutResult } from '../src/levels/seedrescue.js';
 import { mapById } from '../src/levels/index.js';
 
 const T = tally('씨앗 구조대');
@@ -8,6 +8,9 @@ const fresh = (seed = 3) => { const world = new PhysicsWorld(); return { world, 
 T.check('생명 분류에 맵 등록', { ok: mapById('seedrescue').subject === '생명' && mapById('seedrescue').build === buildSeedRescue, why: '' });
 T.check('체크포인트 7곳 이상, 출발~결승 약 242m', { ok: fresh().level.checkpoints.length >= 7 && Z.finish === -238, why: String(fresh().level.checkpoints.length) });
 
+// 예상 발판에 올라서서 secs초 서 있는다(레벨 상태는 그대로 이어진다).
+const standOn = (m, x, z, secs) => { const p = new Player(new THREE.Scene()); p.respawn(new THREE.Vector3(x, 1.2, z), 0);
+  for (let t = 0; t < secs; t += S) { m.level.update(t, S, p); p.step(S, { x: 0, y: 0 }, 0, m.world, null, null); } };
 const HIGH = [[0, -18], [-6, -24], [-6, -28.6], [-6, -36], [-6, -60], [-6, -63.5], [0, -66]];
 const HIGH_EDGE = [[0, -18], [-6, -24], [-6, -28.6], [-6, -32], [-8.8, -34], [-8.8, -60], [-8.8, -63.5], [0, -66]];
 const LOW = [[0, -18], [6, -25], [6, -36], [11, -38], [11, -50], [6, -51], [6, -60], [0, -66]];
@@ -123,6 +126,66 @@ for (const [seed, seedId, route, adjust] of [[4, 'bean', LOW, []], [6, 'vegetabl
   const dp = new Player(new THREE.Scene()); dp.respawn(new THREE.Vector3(PETAL_X[1 - lay[0]], 1.05, PETAL_ROWS[0]), 0);
   for (let t = 0; t < 2.5; t += S) { m.level.update(t, S, dp); dp.step(S, { x: 0, y: 0 }, 0, m.world, null, null); }
   T.check('꽃잎: 마른 잎은 처져 떨어짐', { ok: dp.pos.y < -1, why: dp.pos.y.toFixed(2) });
+}
+
+// ─── 예상(가설) 고르기: 선택 활동. 걸어서 발판을 밟으면 기록되고, 건너뛰어도 완주된다 ───
+{
+  const water = (seedId, pad, water) => { const m = fresh(); const st = m.level.seedRescue; st.setSeedType(seedId); st.setWater(water);
+    standOn(m, pad[0], pad[1], PREDICT_DWELL + 0.5);
+    const r = run(m, [pad[0], 1.2, pad[1]], [[pad[0], -73], [0, -76], [0, -79.5]], { maxT: 20 });
+    return { st, r, after: { predict: st.predict.water, hit: st.hits.water } }; };
+  const a = water('vegetable', [-6, -70], 2); // 알맞을 것 같아요 → 채소 씨앗 물 2 = 알맞음
+  T.check('물 예상: 발판을 걸어서 밟고 심으면 예상이 맞았다고 비교', { ok: a.st.result === 'good' && a.after.hit === true && a.after.predict === null, why: JSON.stringify(a.after) });
+  const b = water('vegetable', [-9.5, -70], 2); // 적을 것 같아요 → 실제 알맞음
+  T.check('물 예상: 예상과 다르면 달랐다고 기록', { ok: b.st.result === 'good' && b.after.hit === false, why: JSON.stringify(b.after) });
+  const c = water('vegetable', [-2.5, -70], 5); // 지나칠 것 같아요 → 실제 지나침
+  T.check('물 예상: 지나침을 맞힘', { ok: c.st.result === 'excess' && c.after.hit === true, why: JSON.stringify(c.after) });
+  const m = fresh(); const st = m.level.seedRescue; st.setSeedType('vegetable'); st.setWater(2);
+  st.setPrediction('water', 'low'); st.plant(); st.setPrediction('water', 'good'); st.plant();
+  T.check('물 예상: 정거장마다 첫 비교만 센다(다시 심어 맞혀도 처음 결과 유지)', { ok: st.hits.water === false, why: String(st.hits.water) });
+  T.check('잘못된 예상 값은 무시', { ok: st.setPrediction('water', 'huge') === false && st.setPrediction('nope', 'low') === false, why: '' });
+}
+for (const seed of [2, 5]) {
+  const L = stationLayout(seed);
+  const tryTemp = (guessPad, path) => { const m = fresh(seed); const st = m.level.seedRescue; standOn(m, guessPad[0], guessPad[1], PREDICT_DWELL + 0.5); run(m, [guessPad[0], 1.2, guessPad[1]], path, { maxT: 40 }); return st; };
+  const w = tryTemp([3.5, -116], warmPath(L));
+  T.check(`온도 예상 시드 ${seed}: 온실 예상 → 온실에 심어 맞힘`, { ok: w.temp.result === 'warm' && w.hits.temp === true, why: JSON.stringify(w.hits) });
+  const c = tryTemp([-3.5, -116], warmPath(L));
+  T.check(`온도 예상 시드 ${seed}: 얼음 창고 예상 → 온실에서 싹이 터 예상이 달랐음`, { ok: c.hits.temp === false, why: JSON.stringify(c.hits) });
+  const m = fresh(seed); const st = m.level.seedRescue;
+  st.setPrediction('temp', 'warm'); st.plantTemp('cold');
+  T.check(`온도 예상 시드 ${seed}: 온실 예상인데 창고에 심으면 아직 판정하지 않고 예상 유지`, { ok: st.hits.temp === null && st.predict.temp === 'warm', why: JSON.stringify(st.predict) });
+  st.plantTemp('warm');
+  T.check(`온도 예상 시드 ${seed}: 이어서 온실에 심으면 맞힘`, { ok: st.hits.temp === true && st.predict.temp === null, why: JSON.stringify(st.hits) });
+  const m2 = fresh(seed); const st2 = m2.level.seedRescue;
+  st2.setPrediction('temp', 'cold'); st2.plantTemp('cold');
+  T.check(`온도 예상 시드 ${seed}: 얼음 창고 예상 → 창고에 심어도 싹이 안 터 달랐음`, { ok: st2.hits.temp === false, why: JSON.stringify(st2.hits) });
+}
+{
+  const dark = (pad) => { const m = fresh(5); const st = m.level.seedRescue; standOn(m, pad[0], pad[1], PREDICT_DWELL + 0.5); run(m, [pad[0], 1.2, pad[1]], darkPath, { maxT: 40 }); return st; };
+  const a = dark([4.5, -178]);
+  T.check('빛 예상: 없어도 틀 것 같다 → 어두운 터널에서 맞힘', { ok: a.light.place === 'dark' && a.hits.light === true, why: JSON.stringify(a.hits) });
+  const b = dark([-4.5, -178]);
+  T.check('빛 예상: 꼭 필요할 것 같다 → 어두운 터널에서 싹이 터 달랐음', { ok: b.hits.light === false, why: JSON.stringify(b.hits) });
+  const m = fresh(5); const st = m.level.seedRescue;
+  st.setPrediction('light', 'need'); st.plantLight('garden');
+  T.check('빛 예상: 밝은 정원에 심으면 판정할 수 없어 보류(기록 없음)', { ok: st.hits.light === null && st.predict.light === 'need', why: JSON.stringify(st.hits) });
+}
+{
+  const m = fresh(); const st = m.level.seedRescue;
+  run(m, [-11, 1.2, -70], [[-1, -70], [4, -70]], { maxT: 10 }); // 세 발판을 걸어서 지나감
+  T.check('예상 발판을 지나치기만 하면 기록되지 않음(잠깐 서 있어야 선택)', { ok: st.predict.water === null, why: String(st.predict.water) });
+  standOn(m, -6, -70, 0.3);
+  T.check('예상 발판에 잠깐만 서도 기록되지 않음', { ok: st.predict.water === null, why: String(st.predict.water) });
+  standOn(m, -6, -70, PREDICT_DWELL + 0.5);
+  T.check('예상 발판에 서 있으면 기록됨', { ok: st.predict.water === 'good', why: String(st.predict.water) });
+}
+{
+  const L = stationLayout(4); const m = fresh(4); const st = m.level.seedRescue; st.setSeedType('bean');
+  const r = run(m, [0, 1, 2], [...LOW, ...POT, ...BRIDGE1, ...warmPath(L), ...darkPath], { maxT: 200 });
+  T.check('예상을 하나도 안 골라도 완주(선택 활동은 건너뛸 수 있음)', { ok: r.ok && m.level.finished && Object.values(st.hits).every((v) => v === null), why: r.why || JSON.stringify(st.hits) });
+  const m2 = fresh(2); const s2 = m2.level.seedRescue; s2.setPrediction('water', 'good'); s2.hits.water = true; m2.level.resetProgress();
+  T.check('처음부터: 예상 기록 초기화', { ok: Object.values(s2.predict).every((v) => v === null) && Object.values(s2.hits).every((v) => v === null), why: '' });
 }
 
 // ─── 상태 ───

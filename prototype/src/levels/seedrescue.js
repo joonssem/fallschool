@@ -3,6 +3,8 @@
 // 맞게 판단하면 가장 쉽고 빠른 길이 열리고, 틀리면 길이 막히지는 않지만 되돌아가 다시 해야 한다(떨어지지 않는다).
 // 물·온도·시간의 수치는 실제 씨앗 자료가 아닌 게임 속 축약 모형이다. (기본 맵 Codex, 세 정거장 구조 Claude — docs/49)
 //
+// 예상 고르기(선택): 정거장마다 심기 전에 발판을 밟아 가설(예상)을 고르고, 심은 뒤 결과와 비교한다. 고르지 않아도 완주한다.
+// 실험표 안내판은 '다르게 한 것 / 같게 한 것 / 알아볼 것'을 보여 준다(변인 통제를 초등 수준 말로).
 // 조작 발판(화분·물 조절)은 모두 "올라선 순간 한 번"만 반응하고, 1.2m 넘게 벗어나야 다시 반응한다.
 import * as THREE from 'three';
 import { createLevel, makeKit, finalizeLevel, sectionFinder } from './kit.js';
@@ -17,6 +19,7 @@ export const SEED_TYPES = [
   { id: 'large', label: '큰 씨앗', hint: '커서 물을 아주 많이 먹어요', minWater: 6, maxWater: 6 },
 ];
 export const DEFAULT_SEED_ID = 'bean';
+export const PREDICT_DWELL = 0.7; // 예상 발판에 서 있어야 하는 시간(초)
 export const WATER_DROPS = { high: 2, low: 5, max: 6, radius: 1.2 };
 export const WATER_RANGES = Object.fromEntries(SEED_TYPES.map(({ id, minWater, maxWater }) => [id, [minWater, maxWater]]));
 export const JUMP_DISTANCES = { normal: 5, dive: 8, bounceSpeed: 15, starGap: 7.0 };
@@ -67,10 +70,18 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
   const state = level.seedRescue = {
     seedType: SEED_TYPES.find((s) => s.id === DEFAULT_SEED_ID), route: null, water: 0, adjustments: 0, result: null, plants: 0, autoPlanted: false,
     temp: { result: null, tries: 0 }, light: { result: null, place: null },
+    predict: { water: null, temp: null, light: null }, hits: { water: null, temp: null, light: null },
     layout: null, drops: [], bridges: {}, stars: level.stars, time: 0,
   };
   const triggers = [];
-  function trigger(x, z, half, fn) { const tr = { x, z, half, fn, armed: true }; triggers.push(tr); return tr; }
+  function trigger(x, z, half, fn, dwell = 0) { const tr = { x, z, half, fn, dwell, held: 0, armed: true }; triggers.push(tr); return tr; }
+  // 예상 고르기 발판: 올라서면 예상이 기록된다(주 동선 옆, 고르지 않아도 진행). 높이 0.16m라 걸어서 올라선다.
+  function predictPad(x, z, label, color, kind, value, width = 3.3) {
+    platform(x, 1.16, z, 3, 3, color);
+    sign(label, x, 3.4, z + 2, { width });
+    trigger(x, z, 1.5, () => state.setPrediction(kind, value), PREDICT_DWELL); // 지나가다 밟아도 기록되지 않게 잠깐 서 있어야 한다
+  }
+  function tableSign(x, y, z, lines, color) { return sign(lines[0], x, y, z, { width: 5.2, lines, color }); }
   function hiddenStar(at) {
     const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.68), mat(0xffcf33, { emissive: 0xe79b00, emissiveIntensity: 0.72 }));
     mesh.position.copy(HIDDEN); root.add(mesh);
@@ -147,6 +158,12 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
   sign('물 한 방울 덜기', -7.5, 3.6, Z.pot + 2, { width: 3.8 });
   sign('물 한 방울 더하기', 7.5, 3.6, Z.pot + 2, { width: 3.8 });
   sign('화분', 0, 4.8, -69.5, { width: 6, lines: ['화분에 올라서면 심어요', '물을 바꿨다면 다시 올라서요'] });
+  tableSign(-6, 6.2, -68, ['① 실험표 · 물', '다르게 한 것: 물의 양', '같게 한 것: 온도 · 빛', '알아볼 것: 싹의 모양'], '#267c9e');
+  const predictWaterSign = dynamicSign(root, { x: -6, y: 4.6, z: -70, width: 5, rows: 1, color: '#267c9e' });
+  sign('예상 고르기 (선택)', -6, 5.9, -70, { width: 4.4 });
+  predictPad(-9.5, -70, '물이 적을 것 같아요', 0xe4a879, 'water', 'low');
+  predictPad(-6, -70, '알맞을 것 같아요', 0x9ed39a, 'water', 'good');
+  predictPad(-2.5, -70, '지나칠 것 같아요', 0x63bde0, 'water', 'excess');
   const waterSign = dynamicSign(root, { x: 0, y: 6.2, z: -81.6, width: 7, rows: 2, color: '#267c9e' });
   trigger(-7.5, Z.pot, 1.5, () => state.drainWater());
   trigger(7.5, Z.pot, 1.5, () => state.addWater());
@@ -163,6 +180,11 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
   // 지나가는 길 위(가운데)에 얼음 창고 화분, 옆으로 돌아가면 온실 화분. 얼음 창고에 심으면 싹이 트지 않아 온실로 되돌아가야 한다.
   checkpoint(platform(0, 1, -129, 22, 42, 0xd9c8a5), new THREE.Vector3(0, 1, -112), '② 온도 정거장'); // -108 ~ -150
   sign('② 온도 정거장', 0, 6.6, -110, { width: 8, lines: ['② 온도 정거장', '두 화분의 물은 똑같아요', '어디에 심어야 싹이 틀까요?'], color: '#b0641c' });
+  tableSign(-8, 6.4, -113, ['② 실험표 · 온도', '다르게 한 것: 온도', '같게 한 것: 물 · 빛', '알아볼 것: 싹이 트는지'], '#b0641c');
+  const predictTempSign = dynamicSign(root, { x: 0, y: 4.6, z: -116, width: 5, rows: 1, color: '#b0641c' });
+  sign('예상 고르기 (선택)', 0, 5.9, -116, { width: 4.4 });
+  predictPad(-3.5, -116, '얼음 창고에서 틀 것 같아요', 0xcfeefa, 'temp', 'cold', 4.4);
+  predictPad(3.5, -116, '온실에서 틀 것 같아요', 0xf5e6b8, 'temp', 'warm', 4.4);
   const iceMat = new THREE.MeshStandardMaterial({ color: 0xcfeefa, roughness: 0.1, metalness: 0.2 });
   platform(0, 1.04, Z.coldPlanter, 9, 9, 0xcfeefa, { material: iceMat, icy: true }); // 얼음 바닥(미끄럽다)
   pot(0, Z.coldPlanter, 0x8fb7c9);
@@ -190,6 +212,11 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
   // 가운데 어두운 터널은 짧고, 옆의 밝은 정원은 돌아간다. 어느 쪽에 심어도 싹이 튼다: 싹이 트는 데는 빛이 필요하지 않다.
   checkpoint(platform(0, 1, -191, 22, 42, 0xd9c8a5), new THREE.Vector3(0, 1, -173), '③ 빛 정거장'); // -170 ~ -212
   sign('③ 빛 정거장', 0, 6.6, -172, { width: 8, lines: ['③ 빛 정거장', '물과 온도는 같아요', '어두운 터널과 밝은 정원, 어디서 싹이 틀까요?'], color: '#6a4c93' });
+  tableSign(8, 6.4, -176, ['③ 실험표 · 빛', '다르게 한 것: 빛', '같게 한 것: 물 · 온도', '알아볼 것: 싹이 트는지'], '#6a4c93');
+  const predictLightSign = dynamicSign(root, { x: 0, y: 4.6, z: -178, width: 5, rows: 1, color: '#6a4c93' });
+  sign('예상 고르기 (선택)', 0, 5.9, -178, { width: 4.4 });
+  predictPad(-4.5, -178, '빛이 꼭 필요할 것 같아요', 0xffe08a, 'light', 'need', 4.4);
+  predictPad(4.5, -178, '빛이 없어도 틀 것 같아요', 0x59607a, 'light', 'noneed', 4.4);
   const curtain = new THREE.Mesh(new THREE.PlaneGeometry(6, 5), new THREE.MeshBasicMaterial({ color: 0x0b1424, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
   curtain.position.set(0, 3.5, -181); root.add(curtain);
   for (const sx of [-1, 1]) block(sx * 3.3, 6, -192, 0.6, 5, 22, 0x2f3346); // 터널 벽 (z -181 ~ -203)
@@ -269,6 +296,34 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
     gardenSprout.show(p === 'garden' ? 'good' : null);
   }
 
+  // 예상(가설) 고르기와 결과 비교. 예상은 선택이라 안 골라도 진행되며, 정거장마다 첫 비교만 '맞음/달랐음'으로 센다.
+  const PREDICT_LABEL = {
+    water: { low: '물이 적을 것 같아요', good: '물이 알맞을 것 같아요', excess: '물이 지나칠 것 같아요' },
+    temp: { cold: '얼음 창고에서 틀 것 같아요', warm: '온실에서 틀 것 같아요' },
+    light: { need: '빛이 꼭 필요할 것 같아요', noneed: '빛이 없어도 틀 것 같아요' },
+  };
+  const readoutOf = { water: predictWaterSign, temp: predictTempSign, light: predictLightSign };
+  state.setPrediction = (kind, value) => {
+    if (!PREDICT_LABEL[kind]?.[value]) return false;
+    if (kind === 'light' && state.light.place) return false; // 이미 심은 뒤에는 바꾸지 않는다
+    if (kind === 'temp' && state.temp.result === 'warm') return false;
+    state.predict[kind] = value;
+    readoutOf[kind].set([`내 예상: ${PREDICT_LABEL[kind][value]}`]);
+    level.onMessage?.(`내 예상: ${PREDICT_LABEL[kind][value]}. 심어서 확인해 봐요!`, true);
+    return true;
+  };
+  /** 예상이 있으면 결과와 비교한 문장을 돌려주고 예상을 비운다. 없으면 ''. hit이 null이면 아직 판정할 수 없다. */
+  function compare(kind, hit, hitText, missText, pendingText) {
+    const guess = state.predict[kind];
+    if (!guess) return '';
+    if (hit === null) return pendingText;
+    state.predict[kind] = null;
+    readoutOf[kind].set(['예상을 골라 보세요']);
+    if (state.hits[kind] === null) state.hits[kind] = hit;
+    return `내 예상: ${PREDICT_LABEL[kind][guess]} → ${hit ? hitText : missText} `;
+  }
+  const hitMark = (v) => (v === null ? '-' : v ? '○' : '△');
+  const predictSummary = () => (Object.values(state.hits).every((v) => v === null) ? null : `내 예상  물 ${hitMark(state.hits.water)}  온도 ${hitMark(state.hits.temp)}  빛 ${hitMark(state.hits.light)}`);
   state.chooseRoute = (id) => { if (state.route === id) return; state.route = id; level.onMessage?.(id === 'high' ? '높은 잎길: 짧지만 물방울이 적어요.' : '낮은 샘길: 길지만 물방울이 많아요.', true); };
   state.addWater = () => {
     if (state.water >= WATER_DROPS.max) { level.onMessage?.(`물이 가득해요 (${state.water}방울).`, false); return false; }
@@ -285,7 +340,8 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
     state.plants++; state.autoPlanted = auto;
     refreshWater();
     if (state.result === 'good' && state.plants === 1 && !firstTryStar.got) firstTryStar.mesh.position.copy(firstTryStar.at); // 한 번에 맞히면 별
-    level.onMessage?.(`${auto ? '심지 않고 와서 지금 물로 심었어요. ' : ''}${RESULT_TEXT[state.result]}`, state.result === 'good');
+    const cmp = compare('water', state.predict.water === state.result, '맞았어요!', '달랐어요. 왜 달랐을까요?');
+    level.onMessage?.(`${auto ? '심지 않고 와서 지금 물로 심었어요. ' : ''}${cmp}${RESULT_TEXT[state.result]}`, state.result === 'good');
     return state.result;
   };
   state.plantTemp = (place) => {
@@ -293,15 +349,19 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
     state.temp.tries++;
     state.temp.result = place;
     refreshTemp();
-    level.onMessage?.(place === 'warm' ? '따뜻한 온실에서 싹이 텄어요! 싹이 트려면 알맞은 온도가 필요해요.' : '얼음 창고는 너무 차가워 싹이 트지 않아요. 물은 같았는데 무엇이 달랐을까요? 따뜻한 곳을 찾아요.', place === 'warm');
+    // 싹이 튼 곳은 온실뿐이다. 얼음 창고에 심었는데 예상이 '온실'이면 아직 판정하지 않는다(온실에도 심어 봐야 안다).
+    const cmp = compare('temp', place === 'warm' ? state.predict.temp === 'warm' : state.predict.temp === 'cold' ? false : null, '맞았어요!', '달랐어요.', '얼음 창고에서는 싹이 안 텄어요. 온실에도 심어 예상을 확인해 봐요. ');
+    level.onMessage?.(`${cmp}${place === 'warm' ? '따뜻한 온실에서 싹이 텄어요! 싹이 트려면 알맞은 온도가 필요해요.' : '얼음 창고는 너무 차가워 싹이 트지 않아요. 물은 같았는데 무엇이 달랐을까요? 따뜻한 곳을 찾아요.'}`, place === 'warm');
     return place;
   };
   state.plantLight = (place) => {
     if (state.light.place) return state.light.place;
     state.light.place = place; state.light.result = 'good';
     refreshLight();
-    finalSign.set(['구조 완료!', `물: 알맞게 · 온도: 따뜻하게 · 빛: ${place === 'dark' ? '어두워도 싹이 텄어요' : '밝은 정원'}`, '싹이 트는 데 빛은 꼭 필요할까요?']);
-    level.onMessage?.(place === 'dark' ? '어두운 터널에서도 싹이 텄어요! 싹이 트는 데는 빛이 필요하지 않아요. (자라는 데는 빛이 필요해요)' : '밝은 정원에서 싹이 텄어요. 어두운 터널이었다면 어땠을까요? 다음에 확인해 봐요.', true);
+    // 어두운 곳에서 싹이 터야 '빛이 필요 없다'를 확인한다. 밝은 정원에서 튼 것만으로는 예상을 판정할 수 없다.
+    const cmp = compare('light', place === 'dark' ? state.predict.light === 'noneed' : null, '맞았어요!', '달랐어요. 빛이 없어도 싹이 텄어요.', '밝은 정원에서는 싹이 텄어요. 빛이 필요한지는 어두운 곳에서도 확인해야 알 수 있어요. ');
+    finalSign.set(['구조 완료!', `물: 알맞게 · 온도: 따뜻하게 · 빛: ${place === 'dark' ? '어두워도 싹이 텄어요' : '밝은 정원'}`, predictSummary() || '싹이 트는 데 빛은 꼭 필요할까요?']);
+    level.onMessage?.(`${cmp}${place === 'dark' ? '어두운 터널에서도 싹이 텄어요! 싹이 트는 데는 빛이 필요하지 않아요. (자라는 데는 빛이 필요해요)' : '밝은 정원에서 싹이 텄어요. 어두운 터널이었다면 어땠을까요? 다음에 확인해 봐요.'}`, true);
     return place;
   };
   state.setSeedType = (id) => { const next = SEED_TYPES.find((s) => s.id === id); if (!next) return false; state.seedType = next; seedSign.set([`씨앗 1: ${next.label}`, next.hint]); updateWaterReadout(); return true; };
@@ -327,7 +387,9 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
     state.seedType = seedTypeFor(s);
     Object.assign(state, { route: null, water: 0, adjustments: 0, result: null, plants: 0, autoPlanted: false, time: 0 });
     state.temp = { result: null, tries: 0 }; state.light = { result: null, place: null };
-    for (const tr of triggers) tr.armed = true;
+    state.predict = { water: null, temp: null, light: null }; state.hits = { water: null, temp: null, light: null };
+    for (const k of Object.keys(readoutOf)) readoutOf[k].set(['예상을 골라 보세요']);
+    for (const tr of triggers) { tr.armed = true; tr.held = 0; }
     for (const d of drops) { d.got = false; d.mesh.visible = true; }
     seedSign.set([`씨앗 1: ${state.seedType.label}`, state.seedType.hint]);
     applyLayout(s);
@@ -360,8 +422,14 @@ export function buildSeedRescue(parent, world, { seed = 1 } = {}) {
     const p = player.pos;
     for (const tr of triggers) {
       const d = Math.max(Math.abs(p.x - tr.x), Math.abs(p.z - tr.z));
-      if (d < tr.half && p.y > 0.9 && p.y < 2.4 && tr.armed) { tr.armed = false; tr.fn(); }
-      else if (d > tr.half + 1.2) tr.armed = true;
+      const inside = d < tr.half && p.y > 0.9 && p.y < 2.4;
+      if (inside) {
+        tr.held += dt;
+        if (tr.armed && tr.held >= tr.dwell) { tr.armed = false; tr.fn(); }
+      } else {
+        tr.held = 0;
+        if (d > tr.half + 1.2) tr.armed = true;
+      }
     }
     if (p.z < -23 && p.z > -62) { if (p.x < -2) state.chooseRoute('high'); else if (p.x > 2) state.chooseRoute('low'); }
     for (const drop of drops) {
