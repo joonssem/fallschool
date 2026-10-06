@@ -1,6 +1,6 @@
 import './harness.mjs';
 import { THREE, PhysicsWorld, Player, S, run, tally } from './harness.mjs';
-import { ICE_PACKS, ICE_ROUTES, TRIAL_DURATION, BIG_SHOW, iceTrial, iceDelivery, buildIceTaxi } from '../src/levels/icetaxi.js';
+import { ICE_PACKS, ICE_ROUTES, ICE_ROUTES_2, TRIAL_DURATION, BIG_SHOW, BIG_SHOW_2, LEG2, LANE_X, iceTrial, iceDelivery, iceDelivery2, buildIceTaxi } from '../src/levels/icetaxi.js';
 import { MAPS, mapById } from '../src/levels/index.js';
 
 const T = tally('열을 지키는 얼음 택배');
@@ -92,4 +92,67 @@ T.check(`큰 공연(${BIG_SHOW * 100}% 이상)은 포장 C로만`, { ok: big.len
   T.check('초기화하면 공연 별·무게가 처음으로', { ok: !m.level.showStar.got && m.level.showStar.mesh.position.y < -100 && m.level.gravityAt() === 1, why: '' });
 }
 T.check('도착 뒤에는 포장 무게가 사라짐(점프 보통)', (() => { const m = fresh(); m.level.ice.choosePack(ICE_PACKS[2]); const before = m.level.gravityAt(); m.level.ice.chooseRoute(ICE_ROUTES.shade); m.level.update(1, 1, { pos: new THREE.Vector3(0, 1, -88) }); return { ok: before === 1.6 && m.level.gravityAt() === 1, why: `${before} → ${m.level.gravityAt()}` }; })());
+
+// ─── 두 번째 배달 (docs/56): 재포장소 → 더운 낮의 세 갈래 → 두 번째 공연장 ───
+const table2 = ICE_PACKS.map((pack) => ({ pack, rows: Object.entries(ICE_ROUTES_2).map(([key, route]) => ({ key, ...iceDelivery2(pack, route) })) }));
+console.log('2차 포장×길 남은 얼음 비율(게임 모형):', JSON.stringify(table2.map((r) => [r.pack.name, ...r.rows.map((x) => `${x.key}:${x.remaining.toFixed(3)}`)])));
+T.check('2차: 모든 포장×길 조합이 배달 가능(실패 없음)', { ok: table2.every((r) => r.rows.every((x) => x.delivered)), why: JSON.stringify(table2.map((r) => r.rows.map((x) => x.remaining.toFixed(2)))) });
+const bestRoute2 = table2.map((r) => r.rows.reduce((a, b) => (b.remaining > a.remaining ? b : a)).key);
+T.check('2차: 포장마다 가장 좋은 길이 모두 같지 않음(길 하나가 항상 이기지 않음)', { ok: new Set(bestRoute2).size >= 2, why: bestRoute2.join(',') });
+T.check('2차: 더운 날이라 같은 길도 1차보다 햇빛 노출 영향이 큼', { ok: iceDelivery2(ICE_PACKS[0], ICE_ROUTES_2.hill).remaining < iceDelivery2(ICE_PACKS[2], ICE_ROUTES_2.hill).remaining && iceDelivery2(ICE_PACKS[0], ICE_ROUTES_2.hill).remaining < iceDelivery2(ICE_PACKS[0], ICE_ROUTES_2.tunnel).remaining, why: '' });
+const bigs2 = table2.flatMap((r) => r.rows.filter((x) => x.remaining >= BIG_SHOW_2).map((x) => `${r.pack.name}+${x.key}`));
+T.check(`2차 큰 공연(${BIG_SHOW_2 * 100}% 이상)은 포장 C로만`, { ok: bigs2.length > 0 && bigs2.every((x) => x.startsWith('포장 C')), why: bigs2.join(',') });
+{
+  const level2 = buildIceTaxi(new THREE.Scene(), new PhysicsWorld(), { seed: 3 });
+  const zs = level2.checkpoints.map((c) => c.respawn.z).sort((a, b) => b - a);
+  const gaps = zs.slice(1).map((z, i) => zs[i] - z);
+  T.check('길이 200m 이상(출발 z 5 → 결승 z -206), 체크포인트 간격 45m 이하', { ok: 5 - LEG2.finish >= 200 && Math.max(...gaps) <= 45, why: `${zs.map((z) => z.toFixed(0)).join(',')}` });
+}
+const part1 = (packX) => [[packX, -6], [0, -25], [0, -39], [-7, -52], [-7, -68], [0, -80], [0, -96], [0, -112]];
+const lanePath = {
+  tunnel: [[LANE_X.tunnel, -138], [-8.2, -146], [-8.2, -148.5], [-13.8, -152], [-13.8, -154.5], [LANE_X.tunnel, -160], [-8.2, -166], [-8.2, -168.5], [-13.8, -171], [-13.8, -173.5]],
+  forest: [[LANE_X.forest, -138], [2, -150], [2, -152], [0, -158], [-2, -166], [-2, -168], [0, -173]],
+  hill: [[LANE_X.hill, -138], [LANE_X.hill, -146], [LANE_X.hill, -155], [LANE_X.hill, -166], [LANE_X.hill, -173]],
+};
+const fullWalk = (pack1X, pack2X, lane, seed = 9) => {
+  const w = new PhysicsWorld(); const level2 = buildIceTaxi(new THREE.Scene(), w, { seed });
+  const path = [...part1(pack1X)];
+  if (pack2X !== null) path.push([pack2X, -121]);
+  else path.push([10, -117], [10, -125]); // 재포장소 선택 발판을 피해 돌아서 지난다
+  path.push([0, -128], ...lanePath[lane], [0, -178], [0, -188], [0, -200], [0, -208]);
+  const r = run({ level: level2, world: w }, [0, 0, 2], path, { maxT: 260 });
+  return { level: level2, r };
+};
+for (const lane of ['tunnel', 'forest', 'hill']) {
+  const { level: l, r } = fullWalk(0, null, lane);
+  const route = ICE_ROUTES_2[lane];
+  T.check(`2차 ${route.name}: 포장 B로 처음부터 끝까지 걸어서 완주(재포장 건너뜀)`, { ok: r.ok && l.finished && l.ice.delivered2 && l.ice.route2 === route && !l.deliveryGate2.userData.collider.enabled, why: r.why || `delivered2=${l.ice.delivered2}` });
+  T.check(`2차 ${route.name}: 결과가 계산식과 같고 처음 포장을 그대로 사용`, { ok: l.ice.delivery2 && l.ice.delivery2.remaining === iceDelivery2(ICE_PACKS[1], route).remaining && !l.ice.pack2, why: '' });
+}
+{
+  // 재포장: 1차 포장 C(무거움) → 재포장소에서 A(가벼움)를 골라 고갯길 바위턱을 오르고 별을 얻는다.
+  const { level: l, r } = fullWalk(6, -6, 'hill');
+  T.check('재포장: 1차 포장 C → 2차 포장 A로 바꾸면 고갯길 바위턱을 올라 별을 얻음', { ok: r.ok && l.ice.pack.id === 'pack-c' && l.ice.pack2?.id === 'pack-a' && l.hillStar.got && l.ice.delivery2.remaining === iceDelivery2(ICE_PACKS[0], ICE_ROUTES_2.hill).remaining, why: r.why || `pack2=${l.ice.pack2?.id} star=${l.hillStar.got}` });
+  const heavy = fullWalk(6, 6, 'hill');
+  T.check('무거운 포장 C(2차)로는 고갯길 바위턱을 못 올라 막힘(길을 바꾸면 됨)', { ok: !heavy.r.ok && /막힘/.test(heavy.r.why) && !heavy.level.ice.delivered2, why: heavy.r.why });
+  const heavyForest = fullWalk(6, 6, 'forest');
+  T.check('포장 C + 숲길: 처음부터 끝까지 완주하고 2차 큰 공연 기준(60%)을 채움', { ok: heavyForest.r.ok && heavyForest.level.finished && heavyForest.level.ice.delivery2.remaining >= BIG_SHOW_2 && heavyForest.level.showStar2.mesh.position.y > -100, why: heavyForest.r.why || `remaining=${heavyForest.level.ice.delivery2?.remaining}` });
+}
+{
+  const m = fullWalk(0, 0, 'tunnel');
+  T.check('포장 B + 그늘 터널: 완주하지만 2차 큰 공연 별은 나타나지 않음', { ok: m.r.ok && m.level.showStar2.mesh.position.y < -100 && !m.level.showStar2.got, why: m.r.why });
+  const c = new PhysicsWorld(); const cl = buildIceTaxi(new THREE.Scene(), c, { seed: 9 });
+  const path = [...part1(6), [6, -121], [0, -128], ...lanePath.forest, [0, -178], [0, -188], [-5, -200]];
+  const rc = run({ level: cl, world: c }, [0, 0, 2], path, { maxT: 260 });
+  T.check('포장 C + 숲길: 2차 큰 공연 별이 무대에 나타나 걸어서 얻음', { ok: rc.ok && cl.showStar2.got, why: rc.why || `remaining=${cl.ice.delivery2?.remaining}` });
+  cl.resetProgress();
+  T.check('초기화하면 2차 포장·길·결과·별·문이 처음으로', { ok: !cl.ice.pack2 && !cl.ice.route2 && !cl.ice.delivered2 && !cl.showStar2.got && cl.deliveryGate2.userData.collider.enabled && cl.gravityAt() === 1, why: '' });
+}
+{
+  // 갈림길 앞(재포장소)으로 되돌아오면 다시 고를 수 있다.
+  const w = new PhysicsWorld(); const l = buildIceTaxi(new THREE.Scene(), w, { seed: 9 });
+  const path = [...part1(0), [0, -128], [LANE_X.forest, -143], [0, -126]];
+  const r = run({ level: l, world: w }, [0, 0, 2], path, { maxT: 120 });
+  T.check('갈림길 앞으로 되돌아오면 2차 길 선택이 풀려 다시 고를 수 있음', { ok: r.ok && l.ice.route2 === null && !l.ice.carrying2, why: r.why || `route2=${l.ice.route2?.name}` });
+}
 T.report();

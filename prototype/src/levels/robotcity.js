@@ -7,7 +7,12 @@ export const ROBOT_STOPS = [
   { name: '우체국 배송', start: [0, 0], target: [0, -6], dirs: [0, 0, 0], required: ['forward', 'forward', 'forward'] },
   { name: '모퉁이 배송', start: [0, -47], target: [2, -49], dirs: [0, 0, 1], required: ['forward', 'right', 'forward'] },
   { name: '공원 배송', start: [0, -82], target: [4, -84], dirs: [0, 0, 1, 1], required: ['forward', 'right', 'forward', 'forward'] },
+  // 새 개념: 반복. '반복 ×3' 명령은 바로 다음 명령을 세 번 한다. 명령은 여섯 개까지라서 반복 없이는 닿지 않는다.
+  { name: '반복 배송', start: [0, 0], target: [2, -12], dirs: [0], required: ['x3', 'forward', 'x3', 'forward', 'right', 'forward'], repeat: true, long: true, max: 6 },
+  // 반복 없이도 명령 6개로 배송할 수 있다(기본). 반복을 쓰면 5개로 줄어 선택 별이 나타난다. 명령은 8개까지 허용.
+  { name: '도시 광장 배송', start: [0, 0], target: [6, -4], dirs: [0], required: ['forward', 'forward', 'right', 'x3', 'forward'], repeat: true, max: 8, shortStar: 5 },
 ];
+export const STATION_Z = [-31, -66, -101, -136, -179];
 
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const COMMAND_PALETTE = [
@@ -15,9 +20,16 @@ const COMMAND_PALETTE = [
   { command: 'left', label: '왼쪽 회전', x: 5, dz: 12, color: 0x67a9e5 },
   { command: 'right', label: '오른쪽 회전', x: 0, dz: 6, color: 0xe99361 },
 ];
-const MAX_COMMANDS = 6;
-const commandIcon = (command) => ({ forward: '↑ 앞', left: '↶ 왼', right: '↷ 오' })[command];
-const commandLabel = (command) => ({ forward: '앞으로', left: '왼쪽 회전', right: '오른쪽 회전' })[command];
+// 반복 배송부터는 네 발판을 한 줄로 둔다. 사이를 지날 때 뒤로 한 발 물러나면 다른 발판을 밟지 않는다.
+const REPEAT_PALETTE = [
+  { command: 'forward', label: '앞으로', x: -7.5, dz: 12, color: 0x68c99a },
+  { command: 'left', label: '왼쪽 회전', x: -2.5, dz: 12, color: 0x67a9e5 },
+  { command: 'right', label: '오른쪽 회전', x: 2.5, dz: 12, color: 0xe99361 },
+  { command: 'x3', label: '반복 ×3', x: 7.5, dz: 12, color: 0xb98ae8 },
+];
+const DEFAULT_MAX_COMMANDS = 6;
+const commandIcon = (command) => ({ forward: '↑ 앞', left: '↶ 왼', right: '↷ 오', x3: '×3' })[command];
+const commandLabel = (command) => ({ forward: '앞으로', left: '왼쪽 회전', right: '오른쪽 회전', x3: '반복 ×3 (다음 명령 3번)' })[command];
 const same = (a, b) => Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01;
 
 export function runRobotCommands(start, direction, commands) {
@@ -25,13 +37,19 @@ export function runRobotCommands(start, direction, commands) {
   const steps = [];
   let dir = direction;
   let pos = start.slice();
+  let times = 1;
   for (const command of commands) {
-    if (command === 'left') dir = (dir + 3) % 4;
-    else if (command === 'right') dir = (dir + 1) % 4;
-    else if (command === 'forward') {
-      pos = [pos[0] + DIRS[dir][0] * 2, pos[1] + DIRS[dir][1] * 2];
-      path.push(pos.slice());
+    // '반복 ×3'은 움직이지 않고, 바로 다음 명령을 세 번 하게 한다.
+    if (command === 'x3') { times = 3; steps.push({ position: pos.slice(), direction: dir, command }); continue; }
+    for (let k = 0; k < times; k++) {
+      if (command === 'left') dir = (dir + 3) % 4;
+      else if (command === 'right') dir = (dir + 1) % 4;
+      else if (command === 'forward') {
+        pos = [pos[0] + DIRS[dir][0] * 2, pos[1] + DIRS[dir][1] * 2];
+        path.push(pos.slice());
+      }
     }
+    times = 1;
     steps.push({ position: pos.slice(), direction: dir, command });
   }
   return { path, steps, direction: dir, position: pos };
@@ -44,7 +62,9 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
       { name: '짧은 배송', zMax: -15 },
       { name: '모퉁이 배송', zMax: -55 },
       { name: '공원 배송', zMax: -90 },
-      { name: '도시 배송 완료', zMax: -125 },
+      { name: '반복 배송', zMax: -125 },
+      { name: '도시 광장 배송', zMax: -165 },
+      { name: '도시 배송 완료', zMax: -215 },
     ]),
     sky: { background: 0xb9d8ee, fog: [0xb9d8ee, 75, 185], hemi: 1.5 },
   });
@@ -69,25 +89,28 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
   }
 
   function station(config, index) {
-    const z = [-31, -66, -101][index];
-    const deck = platform(0, 1, z + 8, 22, 24, [0xd7e8ce, 0xf3dfbd, 0xc9d9f0][index]);
+    const z = STATION_Z[index];
+    const maxCommands = config.max ?? DEFAULT_MAX_COMMANDS;
+    const doorOffset = config.long ? 19 : 10.5; // 반복 배송은 로봇이 더 멀리 가서 문이 더 멀다
+    const deck = platform(0, 1, z + 8, 22, 24, [0xd7e8ce, 0xf3dfbd, 0xc9d9f0, 0xe7d3f0, 0xf7e2b8][index]);
     checkpoint(deck, new THREE.Vector3(0, 1, z + 17), config.name);
     sign(config.name, 0, 13, z + 2, { width: 8 });
     const robotStart = [0, z + 1];
     // ROBOT_STOPS의 start·target은 같은 좌표계라 차이(상대 이동)만 쓴다. 로봇은 정류장 안 robotStart에서 출발한다.
     const target = [robotStart[0] + config.target[0] - config.start[0], robotStart[1] + config.target[1] - config.start[1]];
     // 짧은 도로망은 타일 표식만 보여 주고, 캐릭터 점프는 필요 없다.
+    const roadLen = config.long ? 32 : 24;
     for (let i = -1; i <= 1; i++) {
-      platform(i * 4, 1.05, z - 5, 3.6, 24, 0x8a9aa5, { thick: 0.18 });
-      for (let j = 0; j < 4; j++) block(i * 4, 1.16, z - 1 - j * 4, 0.12, 0.025, 1.4, 0xf7f2d0);
+      platform(i * 4, 1.05, z + 7 - roadLen / 2, 3.6, roadLen, 0x8a9aa5, { thick: 0.18 });
+      for (let j = 0; j < roadLen / 6; j++) block(i * 4, 1.16, z - 1 - j * 4, 0.12, 0.025, 1.4, 0xf7f2d0);
     }
     const startPad = platform(-8, 1.15, z + 1, 3, 3, 0x75c9a5); sign('출발', -8, 3, z - 0.8, { width: 2.8 });
     const targetBuilding = block(target[0], 4.8, target[1] - 4, 3.6, 7.6, 3.6, 0xf2a65a, { castShadow: true });
-    const door = block(0, 5, z - 10.5, 12, 8, 0.8, 0x566b7b, { dynamic: true });
-    const roadBridge = platform(0, 1, z - 13, 12, 5, 0xa7c7d5);
+    const door = block(0, 5, z - doorOffset, 12, 8, 0.8, 0x566b7b, { dynamic: true });
+    const roadBridge = platform(0, 1, z - doorOffset - 2.5, 12, 5, 0xa7c7d5);
     const robot = makeRobot(robotStart[0], robotStart[1]);
     const grid = [];
-    for (const option of COMMAND_PALETTE) {
+    for (const option of config.repeat ? REPEAT_PALETTE : COMMAND_PALETTE) {
       const x = option.x, commandZ = z + option.dz;
       block(x, 3.2, commandZ, 2.8, 0.15, 2.8, 0xe9f0f2);
       const tile = platform(x, 1.15, commandZ, 2.4, 2.4, 0xb9c4d0);
@@ -105,7 +128,7 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 768, 240); ctx.fillStyle = '#263238';
       ctx.font = `bold ${Math.max(20, Math.min(34, 700 / [...text].length))}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 384, 66);
       if (commands.length) {
-        const gap = 112, width = Math.min(100, gap - 8), start = 384 - ((commands.length - 1) * gap) / 2;
+        const gap = Math.min(112, 720 / commands.length), width = Math.min(100, gap - 8), start = 384 - ((commands.length - 1) * gap) / 2;
         commands.forEach((command, i) => {
           const x = start + i * gap;
           if (i === active) { ctx.fillStyle = '#ffe08a'; ctx.fillRect(x - width / 2, 113, width, 80); }
@@ -120,16 +143,26 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
     const state = { config, index, robot, targetBuilding, door, roadBridge, grid, commands: [], get commandLabels() { return this.commands.map(commandLabel); }, path: [], deliveries: 0, solved: false, running: false, runAt: 0, startPad, runPad, resetPad, doorLift: 0, status: showMessage, message: '명령을 골라요' };
     level.deliveries.push(state);
     const pathPoints = [];
-    for (let i = 0; i <= MAX_COMMANDS; i++) {
+    for (let i = 0; i <= maxCommands * 3 + 1; i++) {
       const marker = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffef99 }));
       marker.position.set(0, 1.3, z + 1); marker.visible = false; root.add(marker); pathPoints.push(marker);
     }
     state.markers = pathPoints;
+    // 선택 별: 정해진 개수 이하의 명령으로 배송하면 나타난다(그 전에는 닿지 않는 곳에 숨겨 둔다).
+    if (config.shortStar) {
+      challengeStar(-9, 1, z + 9);
+      const star = level.stars.at(-1);
+      state.star = star;
+      state.starAt = star.mesh.position.clone();
+      state.hideStar = () => { star.mesh.position.set(state.starAt.x, -200, state.starAt.z); star.mesh.visible = false; };
+      state.hideStar();
+    }
     state.reset = () => {
       state.commands = []; state.path = []; state.solved = false; state.running = false; state.runAt = 0; state.doorLift = 0;
       state.message = '명령을 골라요'; showMessage(state.message); robot.position.set(robotStart[0], 0, robotStart[1]); robot.rotation.y = 0;
       door.position.y = 1; door.userData.collider.enabled = true; roadBridge.material.color.setHex(0xa7c7d5);
       pathPoints.forEach((p) => { p.visible = false; }); grid.forEach((g) => { g.mesh.material.color.setHex(0xb9c4d0); g.occupied = false; });
+      state.hideStar?.();
     };
     state.run = () => {
       if (state.running || state.solved || state.commands.length === 0) return;
@@ -159,6 +192,12 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
         roadBridge.material.color.setHex(0x70d6a5); targetBuilding.material.color.setHex(0x8bd17c);
         level.onMessage?.(state.message, true);
         state.deliveries++;
+        if (config.shortStar && !state.star.got) {
+          if (state.commands.length <= config.shortStar) {
+            state.star.mesh.position.copy(state.starAt); state.star.mesh.visible = true;
+            level.onMessage?.(`명령 ${state.commands.length}개로 배송했어요! 별이 나타났어요.`, true);
+          } else level.onMessage?.(`명령 ${state.commands.length}개로 배송했어요. ${config.shortStar}개 이하로도 닿을 수 있어요.`, true);
+        }
       } else {
         state.message = '배송지에 도착하지 않았어요. 지나온 길을 보고 명령을 고쳐요.'; showMessage(state.message);
         level.onMessage?.(state.message, false);
@@ -177,9 +216,9 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
         for (const g of grid) {
           const occupied = Math.abs(p.x - g.x) < 1.05 && Math.abs(p.z - g.z) < 1.05 && p.y > 0.8 && p.y < 2;
           if (occupied && !g.occupied) {
-            if (state.commands.length < MAX_COMMANDS) state.commands.push(g.command);
+            if (state.commands.length < maxCommands) state.commands.push(g.command);
             g.mesh.material.color.setHex(g.color);
-            showMessage(`${state.commands.length}/${MAX_COMMANDS}개 명령 · 실행해 경로를 확인해요`);
+            showMessage(`${state.commands.length}/${maxCommands}개 명령 · 실행해 경로를 확인해요`);
           }
           g.occupied = occupied;
         }
@@ -193,11 +232,14 @@ export function buildRobotCity(parent, world, { seed = 1 } = {}) {
   }
 
   ROBOT_STOPS.forEach(station);
-  for (const z of [-44, -79, -114]) platform(0, 1, z, 12, 8, 0xb8e0d2);
-  const finish = platform(0, 1, -130, 24, 18, 0xffdc8a);
-  sign('도시 배송 완료!', 0, 7, -130, { width: 9, lines: ['세 곳의 배송이 끝났어요', '지름길 명령은 선택 도전이에요'] });
-  finishPad(finish, -126);
-  challengeStar(10, 1, -119);
+  for (const z of [-44, -79, -114, -159]) platform(0, 1, z, 12, 8, 0xb8e0d2);
+  sign('새 명령: 반복 ×3', 0, 6, -120, { width: 9, lines: ['반복 ×3은 바로 다음 명령을 세 번 해요', '명령은 여섯 개까지라서 반복을 써야 닿아요'] });
+  sign('도시 광장 배송', 0, 6, -163, { width: 9, lines: ['명령은 여덟 개까지 쓸 수 있어요', '다섯 개 이하로 배송하면 별이 나타나요 (선택)'] });
+  platform(0, 1, -192, 12, 8, 0xb8e0d2);
+  const finish = platform(0, 1, -205, 24, 18, 0xffdc8a);
+  sign('도시 배송 완료!', 0, 7, -205, { width: 9, lines: ['다섯 곳의 배송이 끝났어요', '짧은 명령으로 배송하는 별은 선택 도전이에요'] });
+  finishPad(finish, -201);
+  challengeStar(10, 1, -201);
   level.setSeed = (s) => { level.seed = s; level.deliveries.forEach((d) => d.reset()); };
   finalizeLevel(level);
   const resetProgress = level.resetProgress;
