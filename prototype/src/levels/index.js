@@ -18,6 +18,7 @@ import { buildMagnetHarbor } from './magnetharbor.js';
 import { buildSentenceTrain } from './sentencetrain.js';
 import { buildSeedRescue } from './seedrescue.js';
 import { buildExcavation } from './excavation.js';
+import { buildTerrainExpedition } from './terrainexpedition.js';
 
 // 맵 항목: id, name, build + (선택) subject(분류), blurb(한 줄 설명), coop(친구와 함께 해야 하는 장치가 있나)
 // 선택 화면은 subject 로 묶어 보여 준다. 적지 않으면 '기타'.
@@ -46,6 +47,7 @@ export const MAPS = [
   { id: 'sentencetrain', name: '문장 구조 열차', subject: '국어', blurb: '길을 골라 네 가지 이야기를 만들어요', coop: false, build: buildSentenceTrain },
   { id: 'seedrescue', name: '씨앗 구조대', subject: '생명', blurb: '물의 양을 맞춰 싹 다리를 만들어요', coop: false, build: buildSeedRescue },
   { id: 'excavation', name: '유적 발굴 현장', subject: '사회', blurb: '단서를 보고 파내 전시해요', coop: false, build: buildExcavation },
+  { id: 'terrainexpedition', name: '등고선 지형 탐험대', subject: '사회', blurb: '지형도를 들고 여러 곳을 답사해요', coop: false, build: buildTerrainExpedition },
 ];
 
 // 분류별로 묶기: [[분류, [맵…]], …] (SUBJECTS 순서, 모르는 분류는 뒤에)
