@@ -1,5 +1,6 @@
 // 젤리빈형 캐릭터: 이동, 점프, 다이브, 넘어짐(텀블)과 충돌 처리
 import * as THREE from 'three';
+import { stepSlideVelocity } from './slide-motion.js';
 
 export const TUNING = {
   maxSpeed: 7,
@@ -174,7 +175,9 @@ export class Player {
     else if (this.state === 'getup') control = 0.35;
     else if (this.state === 'tumble') control = 0;
 
-    if (control > 0) {
+    if (control > 0 && this.grounded && this.ground?.slideSurface && this.state === 'normal') {
+      stepSlideVelocity(this.vel, wx, wz, dt, this.ground.slideSurface);
+    } else if (control > 0) {
       const tx = wx * T.maxSpeed;
       const tz = wz * T.maxSpeed;
       let accel = this.grounded ? (hasInput ? T.groundAccel : T.groundDecel) : T.airAccel;
@@ -244,7 +247,7 @@ export class Player {
     // 8. 외부 이동 (바람, 미끄러운 경사)
     _extra.set(0, 0, 0);
     if (windAt) windAt(this.pos, _extra);
-    if (this.grounded && this.ground && this.ground.slippery) {
+    if (this.grounded && this.ground && this.ground.slippery && !this.ground.slideSurface) {
       _extra.x += this.groundNormal.x * T.slideSpeed;
       _extra.z += this.groundNormal.z * T.slideSpeed;
     }

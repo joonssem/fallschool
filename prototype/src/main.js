@@ -805,7 +805,8 @@ function sharedTime() {
 }
 
 function simulate(dt) {
-  const simulatePlayer = net.mode === 'solo' || net.mode === 'student';
+  const pausedByTeacher = net.mode === 'student' && level.pauseOnFreeze && !!net.room?.meta?.frozen;
+  const simulatePlayer = (net.mode === 'solo' || net.mode === 'student') && !pausedByTeacher;
   const stepOnce = () => {
     simTime += STEP;
     level.update(simTime, STEP, simulatePlayer ? player : null);
