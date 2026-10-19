@@ -1,0 +1,429 @@
+{
+  "schema": 1,
+  "units": {
+    "distance": "actual horizontal metres",
+    "seconds": "simulation seconds"
+  },
+  "threshold": {
+    "absoluteMetres": 10,
+    "relative": 0.15
+  },
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14
+  ],
+  "representatives": {
+    "wood": 1,
+    "door": 2,
+    "roof": 4,
+    "brazier": 7,
+    "lamp": 9,
+    "straw": 14
+  },
+  "matrix": [
+    {
+      "cause": "heat",
+      "seed": 7,
+      "methods": {
+        "water": {
+          "distance": 71.619,
+          "seconds": 10.458
+        },
+        "cover": {
+          "distance": 110.705,
+          "seconds": 16.625
+        },
+        "clear": {
+          "distance": 133.897,
+          "seconds": 19.767
+        }
+      }
+    },
+    {
+      "cause": "fuel",
+      "seed": 1,
+      "methods": {
+        "water": {
+          "distance": 133.945,
+          "seconds": 19.8
+        },
+        "cover": {
+          "distance": 110.638,
+          "seconds": 16.608
+        },
+        "clear": {
+          "distance": 71.449,
+          "seconds": 10.4
+        }
+      }
+    },
+    {
+      "cause": "air",
+      "seed": 2,
+      "methods": {
+        "water": {
+          "distance": 134.264,
+          "seconds": 19.833
+        },
+        "cover": {
+          "distance": 61.169,
+          "seconds": 8.875
+        },
+        "clear": {
+          "distance": 134.025,
+          "seconds": 19.808
+        }
+      }
+    }
+  ],
+  "retries": [
+    {
+      "cause": "heat",
+      "seed": 7,
+      "returnOnly": {
+        "from": "첫 작업 완료",
+        "to": "본부 입구(제출 앞 z=-20.4 경계)",
+        "distance": 16.973,
+        "seconds": 2.483
+      },
+      "reviseAndSubmit": {
+        "distance": 35.894,
+        "seconds": 5.333
+      },
+      "total": {
+        "distance": 52.867,
+        "seconds": 7.817
+      }
+    },
+    {
+      "cause": "fuel",
+      "seed": 1,
+      "returnOnly": {
+        "from": "첫 작업 완료",
+        "to": "본부 입구(제출 앞 z=-20.4 경계)",
+        "distance": 16.959,
+        "seconds": 2.533
+      },
+      "reviseAndSubmit": {
+        "distance": 35.925,
+        "seconds": 5.292
+      },
+      "total": {
+        "distance": 52.884,
+        "seconds": 7.825
+      }
+    },
+    {
+      "cause": "air",
+      "seed": 2,
+      "returnOnly": {
+        "from": "첫 작업 완료",
+        "to": "본부 입구(제출 앞 z=-20.4 경계)",
+        "distance": 16.959,
+        "seconds": 2.533
+      },
+      "reviseAndSubmit": {
+        "distance": 32.76,
+        "seconds": 4.808
+      },
+      "total": {
+        "distance": 49.72,
+        "seconds": 7.342
+      }
+    }
+  ],
+  "fullRoutes": [
+    {
+      "cause": "heat",
+      "method": "water",
+      "seed": 7,
+      "investigation": {
+        "distance": 130.533,
+        "seconds": 19.05
+      },
+      "recovery": {
+        "distance": 71.619,
+        "seconds": 10.458
+      },
+      "total": {
+        "distance": 202.153,
+        "seconds": 29.508
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007028137606692
+    },
+    {
+      "cause": "heat",
+      "method": "cover",
+      "seed": 7,
+      "investigation": {
+        "distance": 130.533,
+        "seconds": 19.05
+      },
+      "recovery": {
+        "distance": 110.705,
+        "seconds": 16.625
+      },
+      "total": {
+        "distance": 241.238,
+        "seconds": 35.675
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007028137606692
+    },
+    {
+      "cause": "heat",
+      "method": "clear",
+      "seed": 7,
+      "investigation": {
+        "distance": 130.533,
+        "seconds": 19.05
+      },
+      "recovery": {
+        "distance": 133.897,
+        "seconds": 19.767
+      },
+      "total": {
+        "distance": 264.43,
+        "seconds": 38.817
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007028137606692
+    },
+    {
+      "cause": "fuel",
+      "method": "water",
+      "seed": 1,
+      "investigation": {
+        "distance": 121.239,
+        "seconds": 17.733
+      },
+      "recovery": {
+        "distance": 133.945,
+        "seconds": 19.8
+      },
+      "total": {
+        "distance": 255.184,
+        "seconds": 37.533
+      },
+      "jumps": 0,
+      "maxSpeed": 7.013575407641024
+    },
+    {
+      "cause": "fuel",
+      "method": "cover",
+      "seed": 1,
+      "investigation": {
+        "distance": 121.239,
+        "seconds": 17.733
+      },
+      "recovery": {
+        "distance": 110.638,
+        "seconds": 16.608
+      },
+      "total": {
+        "distance": 231.878,
+        "seconds": 34.342
+      },
+      "jumps": 0,
+      "maxSpeed": 7.006866417093753
+    },
+    {
+      "cause": "fuel",
+      "method": "clear",
+      "seed": 1,
+      "investigation": {
+        "distance": 121.239,
+        "seconds": 17.733
+      },
+      "recovery": {
+        "distance": 71.449,
+        "seconds": 10.4
+      },
+      "total": {
+        "distance": 192.688,
+        "seconds": 28.133
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007477772957331
+    },
+    {
+      "cause": "air",
+      "method": "water",
+      "seed": 2,
+      "investigation": {
+        "distance": 117.859,
+        "seconds": 17.242
+      },
+      "recovery": {
+        "distance": 134.264,
+        "seconds": 19.833
+      },
+      "total": {
+        "distance": 252.123,
+        "seconds": 37.075
+      },
+      "jumps": 0,
+      "maxSpeed": 7.013578770665979
+    },
+    {
+      "cause": "air",
+      "method": "cover",
+      "seed": 2,
+      "investigation": {
+        "distance": 117.859,
+        "seconds": 17.242
+      },
+      "recovery": {
+        "distance": 61.169,
+        "seconds": 8.875
+      },
+      "total": {
+        "distance": 179.028,
+        "seconds": 26.117
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007474695360827
+    },
+    {
+      "cause": "air",
+      "method": "clear",
+      "seed": 2,
+      "investigation": {
+        "distance": 117.859,
+        "seconds": 17.242
+      },
+      "recovery": {
+        "distance": 134.025,
+        "seconds": 19.808
+      },
+      "total": {
+        "distance": 251.884,
+        "seconds": 37.05
+      },
+      "jumps": 0,
+      "maxSpeed": 7.007244400655829
+    }
+  ],
+  "additionalComparisons": {
+    "1": {
+      "cause": "fuel",
+      "object": "wood",
+      "methods": {
+        "water": {
+          "distance": 133.945,
+          "seconds": 19.8
+        },
+        "cover": {
+          "distance": 110.638,
+          "seconds": 16.608
+        },
+        "clear": {
+          "distance": 71.449,
+          "seconds": 10.4
+        }
+      }
+    },
+    "2": {
+      "cause": "air",
+      "object": "door",
+      "methods": {
+        "water": {
+          "distance": 134.264,
+          "seconds": 19.833
+        },
+        "cover": {
+          "distance": 61.169,
+          "seconds": 8.875
+        },
+        "clear": {
+          "distance": 134.025,
+          "seconds": 19.808
+        }
+      }
+    },
+    "4": {
+      "cause": "air",
+      "object": "roof",
+      "methods": {
+        "water": {
+          "distance": 133.968,
+          "seconds": 19.8
+        },
+        "cover": {
+          "distance": 60.942,
+          "seconds": 8.858
+        },
+        "clear": {
+          "distance": 134.05,
+          "seconds": 19.85
+        }
+      }
+    },
+    "7": {
+      "cause": "heat",
+      "object": "brazier",
+      "methods": {
+        "water": {
+          "distance": 71.619,
+          "seconds": 10.458
+        },
+        "cover": {
+          "distance": 110.705,
+          "seconds": 16.625
+        },
+        "clear": {
+          "distance": 133.897,
+          "seconds": 19.767
+        }
+      }
+    },
+    "9": {
+      "cause": "heat",
+      "object": "lamp",
+      "methods": {
+        "water": {
+          "distance": 71.708,
+          "seconds": 10.45
+        },
+        "cover": {
+          "distance": 110.959,
+          "seconds": 16.642
+        },
+        "clear": {
+          "distance": 134.217,
+          "seconds": 19.808
+        }
+      }
+    },
+    "14": {
+      "cause": "fuel",
+      "object": "straw",
+      "methods": {
+        "water": {
+          "distance": 133.901,
+          "seconds": 19.808
+        },
+        "cover": {
+          "distance": 110.667,
+          "seconds": 16.6
+        },
+        "clear": {
+          "distance": 71.526,
+          "seconds": 10.392
+        }
+      }
+    }
+  }
+}
