@@ -36,6 +36,15 @@ export function liftFraction({ rise, top, bottom }, t) {
   return 1 - (u - bottom - rise - top) / rise;
 }
 
+// 선택 길 "수증기 나선 계단": 햇빛 상승기 동쪽 바깥. 기다림 없이 점프로 빙글빙글 올라 구름 쪽 다리로 이어진다.
+// 한 바퀴 반(510°)을 18칸으로 오르고 마지막 칸 옆 "전망 칸"에 도전 별이 있다. 칸 번호 k의 위치·높이는 spiralTile(k)로 계산한다.
+export const EVAP_SPIRAL = { cx: 34, cz: -22, r: 8, n: 18, step: (30 * Math.PI) / 180, a0: Math.PI / 2, y0: EVAP_BOTTOM, y1: EVAP_TOP };
+export function spiralTile(k) {
+  const { cx, cz, r, n, step, a0, y0, y1 } = EVAP_SPIRAL;
+  const a = a0 + k * step;
+  return { x: cx + r * Math.cos(a), z: cz + r * Math.sin(a), y: y0 + ((y1 - y0) * (k + 1)) / n };
+}
+
 const SECTIONS = [
   { name: '바다와 증발', zMax: Infinity },
   { name: '증발 상승로', zMax: -27 },
@@ -79,6 +88,7 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
   sun(18, 14, -21);
   steamDots();
   buildEvapLifts();
+  buildEvapSpiral();
 
   // 구름 속 응결: 공기가 식으면 수증기가 작은 물방울이 된다.
   const cloudPad = platform(0, Y + 6, -43, 16, 10, C.cloud);
@@ -342,6 +352,53 @@ export function buildWater(parent, world, { seed = Date.now() } = {}) {
       } });
     }
     cloudPuffs(-12, 11, -14, 4); // 그늘 쪽 구름
+  }
+
+  // 수증기 나선 계단(선택): 증발한 수증기가 위로 오르는 모습을 빙글빙글 오르는 계단으로 표현한 게임 모형이다.
+  // 입구 광장 → 18칸 → 구름 쪽 다리(구름 발판 옆 y 7.5) → 응결 구름. 상승기·계단과 같은 구름에 닿지만 대기 시간이 없고 점프로 오른다.
+  // 떨어지면 입구 광장이나 중간 칸 체크포인트로 돌아온다. 별은 길 끝 전망 칸 한 곳이다(햇빛 상승기의 별과는 멀리 떨어져 있다).
+  function buildEvapSpiral() {
+    const { cx, cz, n } = EVAP_SPIRAL;
+    const base = platform(25, EVAP_BOTTOM, -9, 20, 6, C.sunny);
+    checkpoint(base, new THREE.Vector3(25, EVAP_BOTTOM, -9), '나선 계단 입구');
+    sign('수증기 나선 계단 (선택)', 20, 4.6, -5.2, {
+      width: 5.6, color: '#e76f51', rotY: 0.4,
+      lines: ['수증기 나선 계단 (선택)', '수증기는 위로 올라가요 (게임 모형)', '기다리지 않고 점프로 올라요 · 떨어져도 괜찮아요'],
+    });
+    for (let k = 0; k < n; k++) {
+      const t = spiralTile(k);
+      const warm = k / (n - 1); // 아래는 따뜻한 노랑, 위로 갈수록 시원한 하늘색 (위쪽 공기는 더 차갑다)
+      const color = new THREE.Color(C.sunny).lerp(new THREE.Color(C.seaLight), warm).getHex();
+      const tile = platform(t.x, t.y, t.z, 3.4, 3.4, color, { castShadow: true });
+      if (k === 8) checkpoint(tile, new THREE.Vector3(t.x, t.y, t.z), '나선 계단 중간');
+    }
+    // 구름 쪽 다리: 마지막 칸 → 다리 두 칸 → 구름 발판(0, 7.5, -43; x -8~8)
+    platform(26, EVAP_TOP, -34.5, 4, 6, C.cloud);
+    platform(16, EVAP_TOP, -39, 16, 4, C.cloud);
+    // 전망 칸의 별: 한 칸 더 오른 곳(별 발판 자체가 마지막 칸 옆에 놓인다)
+    const view = spiralTile(n);
+    challengeStar(view.x, view.y, view.z);
+    // 가운데 수증기 기둥: 눈에 보이지 않는 기체는 희미한 기둥과 점으로만 표시한다 (충돌 없음)
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.6, 10, 16, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, side: THREE.DoubleSide }),
+    );
+    col.position.set(cx, 5, cz);
+    root.add(col);
+    const dots = [];
+    for (let i = 0; i < 14; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
+      root.add(m);
+      dots.push({ m, phase: i / 14 });
+    }
+    movers.push({ root: null, update(t) {
+      for (const d of dots) {
+        const k = (t * 0.1 + d.phase) % 1;
+        const a = k * Math.PI * 6 + d.phase * 9;
+        d.m.position.set(cx + Math.cos(a) * 2.4, 1.5 + k * 8.5, cz + Math.sin(a) * 2.4);
+        d.m.material.opacity = 0.3 * Math.sin(k * Math.PI);
+      }
+    } });
   }
 
   function sun(x, y, z) {

@@ -90,7 +90,7 @@ fallschool/rooms/{방번호}
 
 시작 화면은 반 참가(방 번호·이름·색)만 보여 준다. 맵 고르기는 **혼자 연습하기** 뒤의 별도 화면(분류 탭 + 카드: 이름·한 줄 설명·분류·"함께 하기" 표시)으로 옮겼다. 반에 참가하면 선생님이 고른 맵으로 바뀐다. 교사 패널은 현재 맵 이름과 `바꾸기` 버튼만 보이고, 누르면 분류별 맵 목록이 펼쳐진다 (맵이 늘어도 출발 버튼·학생 목록이 밀리지 않는다). 교사는 대기실·결과 화면에서 맵을 바꿀 수 있고 모든 학생 화면이 따라 바뀐다. 경기 중에는 바꿀 수 없다. 시험용 주소 `?map=body` (혼자 연습하기 → 연습 시작).
 
-새 맵을 등록할 때는 `src/levels/index.js`의 `MAPS` 항목에 `subject`(연습·물리·화학·지구·우주·생명·수학·국어·미술·정보 중 하나), `blurb`(24자 이내 한 줄 설명), `coop`(함께 해야 하는 장치가 있으면 true)를 적는다. 적지 않으면 "기타"로 맨 뒤에 나온다. `tests/maps-meta.mjs`가 확인한다. 등록하면 `tests/map-rules.mjs`의 공통 규칙 검사도 자동으로 받는다(아래 시뮬레이션 시험).
+새 맵을 등록할 때는 `src/levels/index.js`의 `MAPS` 항목에 `subject`(연습·물리·화학·지구·우주·생명·수학·국어·미술·정보·사회 중 하나), `blurb`(24자 이내 한 줄 설명), `coop`(함께 해야 하는 장치가 있으면 true)를 적는다. 적지 않으면 "기타"로 맨 뒤에 나온다. `tests/maps-meta.mjs`가 확인한다. 등록하면 `tests/map-rules.mjs`의 공통 규칙 검사도 자동으로 받는다(아래 시뮬레이션 시험).
 
 | id | 이름 | 특징 |
 |---|---|---|
@@ -355,7 +355,7 @@ npm test
 | `tests/lab.mjs` | 점프 연구소 시험 구간(평균대·징검다리·사라지는 발판·컨베이어·얼음·패드 탑·해머·맞바람 돌풍 순서)과 1부, 쉬움·어려움 단계 |
 | `tests/solar-gates.mjs` | 태양계 문·표시, 달 높이뛰기·화성 협곡·목성 패드 |
 | `tests/acid-lab.mjs`, `tests/course.mjs`, `tests/coop.mjs`, `tests/valve.mjs` | 산과 염기 시험대, 연결 코스, 전기 회로 협동, 인체 판막 협동 |
-| `tests/giantlab.mjs`, `tests/body-water.mjs`, `tests/body-flow.mjs`, `tests/water-lift.mjs` | 거대 실험실, 인체·물의 순환 구간, 인체 혈류·근육 발판, 물의 순환 선택 길(상승기·빙하·지하수 샘) |
+| `tests/giantlab.mjs`, `tests/body-water.mjs`, `tests/body-flow.mjs`, `tests/water-lift.mjs`, `tests/water-spiral.mjs` | 거대 실험실, 인체·물의 순환 구간, 인체 혈류·근육 발판, 물의 순환 선택 길(상승기·빙하·지하수 샘·수증기 나선 계단) |
 | `tests/pizza.mjs`, `tests/colorstudio.mjs`, `tests/geometrylab.mjs`, `tests/shadowtheater.mjs` | 분수 피자(보너스 요청 포함), 미술 공방, 도형 연구소, 그림자 극장 |
 | `tests/wind.mjs`, `tests/windvillage.mjs` | 바람 계산, 바람마을(순풍 도약대·연 발판·낮밤 도약대) |
 | `tests/robotcity.mjs`, `tests/robotcity-walk.mjs`, `tests/icetaxi.mjs`, `tests/echodetective.mjs` | 로봇 도시, 얼음 택배(포장 무게·별 섬), 메아리 탐정단(막다른 굴) |
